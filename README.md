@@ -1,7 +1,7 @@
 # Bullet-Blender
 Air Force Bullet Generation System
 
-#################################################################################################
+
 Usage Instructions:
     - Download Bullet_Blender.zip from GitHub
     - Extract Files to a desired location
@@ -10,7 +10,7 @@ Usage Instructions:
     - Once PowerShell ISE is opened. Click the Green Play Arrow.
     - Success!
 
-################################################################################################
+
 
 Possible Errors:
     - Execution-Policy 
