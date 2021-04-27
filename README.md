@@ -13,12 +13,12 @@ Usage Instructions:
 
 Possible Errors:
 - Execution-Policy 
-    Some systems may prevent you from executing the script even in PowerShell ISE.
-      - On a Government machine: You're pretty much SOL unless you have admin rights.
-      - On a Home Computer: Run PowerShell ISE or PowerShell as an administrator
-          - Type the command:
-                  Set-ExecutionPolicy Unrestricted
-          - Type 
-                  Y
+    - Some systems may prevent you from executing the script even in PowerShell ISE.
+        -   On a Government machine: You're pretty much SOL unless you have admin rights.
+        -   On a Home Computer: Run PowerShell ISE or PowerShell as an administrator
+            - Type the command:
+                 -  Set-ExecutionPolicy Unrestricted
+            - Type 
+                -  Y
 - You're on a MAC
     PowerShell will not run on a MAC.
