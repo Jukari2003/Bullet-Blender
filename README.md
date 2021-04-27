@@ -21,4 +21,4 @@ Possible Errors:
             - Type 
                 -  Y
 - You're on a MAC
-    PowerShell will not run on a MAC.
+    - PowerShell will not run on a MAC.
