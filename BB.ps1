@@ -43,7 +43,6 @@ $script:package_list = @{};                 #Tracks packages Enabled/Disabled St
 
 $script:active_lists = @{};                 #Remembers Which Lists the User is adding acronyms too
 $script:feeder_job = "";                    #Tracks Job for bullet Feeder
-$script:calculate_text_job = "Force";       #Tracks Job for calculating text
 $script:thesaurus_job = "";                 #Tracks Job for Thesaurus lookups
 $script:global_thesaurus = @{};             #Hand-off for Thesaurus
 $script:thesaurus_menu = "";                #Hand-off menu to functions
@@ -94,7 +93,7 @@ if($Script:Timer)
     $Script:Timer.Dispose();
 }
 $Script:Timer = New-Object System.Windows.Forms.Timer       #Main system timer, most functions load through this timer
-$Script:Timer.Interval = 100
+$Script:Timer.Interval = 1000
 $Script:CountDown = 1
 
 ################################################################################
@@ -262,13 +261,12 @@ function main
 
     ###################################################
     $editor.Add_TextChanged({
-        #calculate_text_lengths
         if($script:lock_history -ne 1)
         {
             write_history
         }
         #Reset Idle Timer
-        $Script:CountDown=10         
+        $Script:CountDown=3         
     })
     
     ###################################################
@@ -589,8 +587,11 @@ function build_bullet_menu
         manage_bullets_dialog
     })
 
-    if($script:Bullet_banks.count -ne 0)
+
+
+    if($script:package_list.get_Count() -gt 1)
     {
+
         $separator = [System.Windows.Forms.ToolStripSeparator]::new()
 	    $BulletMenu.DropDownItems.Add($separator) | Out-Null
 
@@ -624,10 +625,10 @@ function build_bullet_menu
             load_bullets
         })
 	    $BulletMenu.DropDownItems.Add($internal_packages) | Out-Null
+    }
 
-
-
-
+    if($script:Bullet_banks.count -ne 0)
+    {
         foreach($bank in $script:Bullet_banks.getEnumerator() | Sort Key)
         {
             $bullet_list = New-Object System.Windows.Forms.ToolStripMenuItem
@@ -735,16 +736,27 @@ function build_acronym_menu
 function build_options_menu
 {
     $OptionsMenu.DropDownItems.clear();
-    $options = New-Object System.Windows.Forms.ToolStripMenuItem
-    $options.Text = "Theme Settings"
-    $options.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
-    $options.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
-    $OptionsMenu.DropDownItems.Add($options) | Out-Null
-    $options.Add_Click({
+    $theme_settings = New-Object System.Windows.Forms.ToolStripMenuItem
+    $theme_settings.Text = "Theme Settings"
+    $theme_settings.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+    $theme_settings.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+    $OptionsMenu.DropDownItems.Add($theme_settings) | Out-Null
+    $theme_settings.Add_Click({
         $OptionsMenu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
         $MenuBar.Refresh();
         interface_dialog
-    }) 
+    })
+
+    $system_settings = New-Object System.Windows.Forms.ToolStripMenuItem
+    $system_settings.Text = "System Settings"
+    $system_settings.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+    $system_settings.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+    $OptionsMenu.DropDownItems.Add($system_settings) | Out-Null
+    $system_settings.Add_Click({
+        $OptionsMenu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+        $MenuBar.Refresh();
+        system_settings_dialog
+    })
 }
 ################################################################################
 #####Build About Menu##########################################################
@@ -1131,7 +1143,7 @@ function import_bullet_processing($input_file,$output_file)
                     $character = $section[$i]
                     if($character_blocks.Contains("$character"))
                     {
-                        $size = $size + ($character_blocks["$character"] / 6)
+                        $size = $size + ($character_blocks["$character"])
                     }
                     else
                     {
@@ -1139,7 +1151,7 @@ function import_bullet_processing($input_file,$output_file)
                         #exit
                     }
                 }
-                [int]$size = 1009 - $size
+                [int]$size = 2719 - $size
                #######################################################
                 if(($size -gt -10) -and ($size -lt 70))
                 {
@@ -2960,7 +2972,10 @@ function save_package_tracker
     }
     if(Test-Path -LiteralPath "$dir\Resources\Required\Package_list_temp.txt")
     {
-        Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+        if(Test-Path -LiteralPath "$dir\Resources\Required\Package_list.txt")
+        {
+            Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+        }
         Rename-Item -LiteralPath "$dir\Resources\Required\Package_list_temp.txt" "$dir\Resources\Required\Package_list.txt"
     }
 }
@@ -3803,7 +3818,7 @@ function scan_text
         }
         #############################################################Shorthand 
         [int]$size = 2719 - $size
-        if(($size -ge 450))
+        if(($size -gt 2718))
         {
             [string]$size = ""
         }
@@ -4475,14 +4490,6 @@ function clipboard_copy_3
     }
 
     #########################################################################################
-    ###Calculate Text Lengths
-    #if([string]$script:calculate_text_job.state -ne "")
-    #{
-    #    #write-host Calculate Text Started
-    #    #calculate_text_lengths
-    #}
-    
-    #########################################################################################
     ###Track Text Changes
     if ($Script:CountDown -eq 0)
     {   
@@ -4861,7 +4868,8 @@ function initial_checks
         $settings_writer.write("THEME,Blue Falcon`r`n");
         $settings_writer.write("PACKAGE,Current`r`n");
         $settings_writer.write("LOAD_PACKAGES_AS_BULLETS,1`r`n");
-        $settings_writer.write("TEXT_COMPRESSION,3`r`n");
+        $settings_writer.write("TEXT_COMPRESSION,4`r`n");
+        $settings_writer.write("CLOCK_SPEED,500`r`n");
         $settings_writer.close();
     }
     ##################################################################################
@@ -4948,7 +4956,13 @@ function load_package
             $slurp = $slurp.substring(0,$slurp.Length - 2)
             $editor.text = $slurp
             $script:old_text = $editor.text
-            #$editor.Font = [Drawing.Font]::New('Times New Roman', 14)
+            $editor.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
+        }
+        else
+        {
+            #write-host "ERROR: Package Snapshot missing or empty"
+            $editor.text = ""
+            $script:old_text = $editor.text
             $editor.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
         }
         $Form.Text = "$script:program_title ($package)"
@@ -4985,6 +4999,7 @@ function load_package
         }
         
     }
+    $Script:recent_editor_text = "Changed Loaded Package";
     $script:lock_history = 0;
     $Script:Timer.Start()
 }
@@ -5039,6 +5054,10 @@ function load_settings
         }
         $reader.close(); 
     }
+    $Script:Timer.Interval = $script:settings['CLOCK_SPEED'];
+    write-host ClocK Speed: $script:settings['CLOCK_SPEED']
+    $Script:Timer.Start()
+    $Script:Timer.Add_Tick({Idle_Timer})
 }
 ################################################################################
 ########CSV Line to Array#######################################################
@@ -5711,7 +5730,9 @@ function save_package_dialog
                       update_settings
                       save_package_tracker
                       $script:return = 1;
+                      $script:recent_editor_text = "Changed"; 
                       $save_pacakge_form.close();
+                      
                 }
             }
             else
@@ -5738,6 +5759,7 @@ function save_package_dialog
                     update_settings
                     save_package_tracker
                     $script:return = 1;
+                    $script:recent_editor_text = "Changed"; 
                     $save_pacakge_form.close();
                     
                 }
@@ -5783,7 +5805,7 @@ function save_package_dialog
     $script:lock_history = 0;  
 }
 ################################################################################
-######Manage Bullet Banks Dialog################################################
+######Manage Package Dialog################################################
 function manage_package_dialog
 {
     save_history
@@ -5813,8 +5835,7 @@ function manage_package_dialog
     {
         $manage_package_form.Height = (($packages.count * 65) + 140)
     }
-    $manage_package_form.Text = "Manage Bullet Banks"
-    #$manage_package_form.TopMost = $True
+    $manage_package_form.Text = "Manage Packages"
     $manage_package_form.TabIndex = 0
     $manage_package_form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     ################################################################################################
@@ -5892,6 +5913,7 @@ function manage_package_dialog
                 $script:settings['PACKAGE'] = $this.name
                 load_package
                 update_settings
+                $Script:recent_editor_text = "Changed"
             });
             $manage_package_form.controls.Add($load_button) 
 
@@ -5922,8 +5944,11 @@ function manage_package_dialog
                            load_package
                            update_settings
                         }
-                        $script:reload_function = "manage_package_dialog"
+                        $Script:recent_editor_text = "Changed"
+                        $script:reload_function = "manage_package_dialog" 
+                        
                         $manage_package_form.close();
+                        
                     }     
                 }
 
@@ -5964,6 +5989,7 @@ function manage_package_dialog
                         update_settings
                     }    
                     $script:reload_function = "manage_package_dialog"
+                    $Script:recent_editor_text = "Changed"
                     $manage_package_form.close();
                 }
             });
@@ -6078,15 +6104,15 @@ function interface_dialog
 {
     
     $v_spacer = 5
-
+    $spacer = 20
     $color_form                                 = New-Object System.Windows.Forms.Form
     $title_label                                = New-Object system.Windows.Forms.Label
     $theme_combo                                = New-Object System.Windows.Forms.ComboBox
     $manage_theme_button                        = New-Object System.Windows.Forms.Button
-    $separator_bar                              = New-Object system.Windows.Forms.Label
+    $separator_bar1                             = New-Object system.Windows.Forms.Label
     $save_theme_button                          = New-Object System.Windows.Forms.Button
     $cancel_theme_button                        = New-Object System.Windows.Forms.Button
-    $separator_bar                              = New-Object system.Windows.Forms.Label
+    $separator_bar2                             = New-Object system.Windows.Forms.Label
     $header_label1                              = New-Object system.Windows.Forms.Label
     $main_background_color_label                = New-Object system.Windows.Forms.Label
     $main_background_color_input                = New-Object system.Windows.Forms.TextBox
@@ -6180,16 +6206,15 @@ function interface_dialog
 
 
     $color_form.FormBorderStyle = 'Fixed3D'
-    #$color_form.AutoSizeMode = 'GrowAndShrink'
-    #$color_form.AutoSize = $true
-    #$color_form.AutoScaleDimensions = '8, 17'
+    $color_form.AutoScroll = $true
     $color_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $color_form.Location = new-object System.Drawing.Point(0, 0)
     $color_form.MaximizeBox = $false
     $color_form.Icon = $icon
     $color_form.SizeGripStyle = "Hide"
-    $color_form.Width = 800
-    $color_form.Height = 1220
+    $color_form.Width = 850
+    $color_form.Height = 900
+    $color_form.text = "Theme Settings";
 
     $y_pos = 10;
 
@@ -6275,125 +6300,20 @@ function interface_dialog
 
     $y_pos = $y_pos + 35
     
-    $separator_bar.text                        = ""
-    $separator_bar.AutoSize                    = $false
-    $separator_bar.BorderStyle                 = "fixed3d"
-    #$separator_bar.ForeColor                  = $script:theme_settings['DIALOG_BOX_BACKGROUND_COLOR']
-    $separator_bar.Anchor                      = 'top,left'
-    $separator_bar.width                       = (($color_form.width - 50) - $spacer)
-    $separator_bar.height                      = 1
-    $separator_bar.location                    = New-Object System.Drawing.Point(20,$y_pos)
-    $separator_bar.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
-    $separator_bar.TextAlign                   = 'MiddleLeft'
-    $color_form.controls.Add($separator_bar);
-
-    #$save_theme_button.autosize = $true
-    #$save_theme_button.AutoSizeMode = 'GrowAndShrink'
-    $save_theme_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
-    $save_theme_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
-    $save_theme_button.Width     = 125
-    $save_theme_button.height     = 27
-    $save_theme_button.Location  = New-Object System.Drawing.Point((($color_form.width / 2) - ($save_theme_button.width - 5)),($color_form.height - 80));
-    $save_theme_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
-    $save_theme_button.Text      ="Save Theme"
-    $save_theme_button.Name = ""
-    $save_theme_button.Add_Click({
-        save_theme_dialog
-        
-    })
-    $color_form.controls.Add($save_theme_button)
-
-    $color_form.add_FormClosing({param($sender,$e)
-        $found = 1;
-        foreach($og in $script:theme_settings.GetEnumerator())
-        {
-            [string]$og1 = $script:theme_original[$og.key]
-            [string]$og2 = $og.value
-            if($og1 -ne $og2)
-            {
-                $found = 0;
-            }
-        }
-        if($found -eq 1)
-        {
-            #No Changes
-            $color_form.close();
-        }
-        else
-        {
-            #Changes Found
-            $message = "You haven't saved your settings, are you sure you want to leave?`n`n"
-            $yesno = [System.Windows.Forms.MessageBox]::Show("$message","!!!WARNING!!!", "YesNo" , "Information" , "Button1")
-            if($yesno -eq "Yes")
-            {
-                $form.BackColor                                       = $script:theme_original['MAIN_BACKGROUND_COLOR']   
-                $MenuBar.BackColor                                    = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $MenuBar.ForeColor                                    = $script:theme_original['MENU_TEXT_COLOR']
-                $FileMenu.BackColor                                   = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $FileMenu.ForeColor                                   = $script:theme_original['MENU_TEXT_COLOR']
-                $OptionsMenu.BackColor                                = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $OptionsMenu.ForeColor                                = $script:theme_original['MENU_TEXT_COLOR']
-                $AboutMenu.BackColor                                  = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $AboutMenu.ForeColor                                  = $script:theme_original['MENU_TEXT_COLOR']
-                $BulletMenu.BackColor                                 = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $BulletMenu.ForeColor                                 = $script:theme_original['MENU_TEXT_COLOR']
-                $script:AcronymMenu.BackColor                         = $script:theme_original['MENU_BACKGROUND_COLOR']
-                $script:AcronymMenu.ForeColor                         = $script:theme_original['MENU_TEXT_COLOR']
-                $Global:sidekick_panel.BackColor                      = $script:theme_original['ADJUSTMENT_BAR_COLOR']
-                $Global:bullet_feeder_panel.BackColor                 = $script:theme_original['ADJUSTMENT_BAR_COLOR']
-                $editor.BackColor                                     = $script:theme_original['EDITOR_BACKGROUND_COLOR']
-                $sizer_box.backcolor                                  = $script:theme_original['TEXT_CALCULATOR_BACKGROUND_COLOR']
-                $feeder_box.BackColor                                 = $script:theme_original['FEEDER_BACKGROUND_COLOR']
-                $feeder_box.ForeColor                                 = $script:theme_original['FEEDER_FONT_COLOR']
-                $Global:left_panel.BackColor                          = $script:theme_original['SIDEKICK_BACKGROUND_COLOR']
-                #calculate_text_lengths
-                load_theme $script:settings['THEME']
-                build_file_menu
-                build_options_menu
-                build_about_menu
-                build_bullet_menu
-                build_acronym_menu
-                $Script:recent_editor_text = "Changed"
-                $script:sidekickgui = "New"
-                update_sidekick
-                #$color_form.close();       
-            }
-            else
-            {
-                $e.cancel = $true
-            }
-        }
-    });
-
-
-
-    
-    $cancel_theme_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
-    $cancel_theme_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
-    $cancel_theme_button.Width     = 125
-    #$cancel_theme_button.autosize = $true
-    #$cancel_theme_button.AutoSizeMode = 'GrowAndShrink'
-    $cancel_theme_button.height     = 27
-    $cancel_theme_button.Location  = New-Object System.Drawing.Point(($save_theme_button.Width + $save_theme_button.location.x  + 5),($color_form.height - 80));
-    $cancel_theme_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
-    $cancel_theme_button.Text      ="Cancel"
-    $cancel_theme_button.Add_Click({
-           $color_form.close();
-    });
-    $color_form.controls.Add($cancel_theme_button)
     
     
-    $separator_bar.text                        = ""
-    $separator_bar.AutoSize                    = $false
-    $separator_bar.BorderStyle                 = "fixed3d"
-    #$separator_bar.ForeColor                   = $global:settings['DIALOG_BOX_TEXT_BOLD_COLOR']
-    $separator_bar.Anchor                      = 'top,left'
-    $separator_bar.width                       = (($color_form.width - 50) - $spacer)
-    $separator_bar.height                      = 1
-    $separator_bar.location                    = New-Object System.Drawing.Point(20,($save_theme_button.Location.y - 7))
-    $separator_bar.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
-    $separator_bar.TextAlign                   = 'MiddleLeft'
-    $color_form.controls.Add($separator_bar);
+    
+    $separator_bar1.text                        = ""
+    $separator_bar1.AutoSize                    = $false
+    $separator_bar1.BorderStyle                 = "fixed3d"
+    #$separator_bar1.ForeColor                   = $global:settings['DIALOG_BOX_TEXT_BOLD_COLOR']
+    $separator_bar1.Anchor                      = 'top,left'
+    $separator_bar1.width                       = (($color_form.width - 50) - $spacer)
+    $separator_bar1.height                      = 1
+    $separator_bar1.location                    = New-Object System.Drawing.Point(20,$y_pos)
+    $separator_bar1.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+    $separator_bar1.TextAlign                   = 'MiddleLeft'
+    $color_form.controls.Add($separator_bar1);
 
     $y_pos = $y_pos + 5
 
@@ -6803,10 +6723,10 @@ function interface_dialog
 
     
     $interface_font_combo.Items.Clear();
-    $interface_font_combo.width = 180
+    $interface_font_combo.width = 160
     $interface_font_combo.Anchor = 'top,right'
     $interface_font_combo.Autosize = $false
-    $interface_font_combo.location                 = New-Object System.Drawing.Point(($interface_font_label.location.x + $interface_font_label.width + 5), ($y_pos + 3))
+    $interface_font_combo.location                 = New-Object System.Drawing.Point(($interface_font_label.location.x + $interface_font_label.width + 25), ($y_pos + 3))
     $interface_font_combo.font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
     $interface_font_combo.DropDownStyle = "DropDownList"
     $interface_font_combo.AccessibleName = ""; 
@@ -6825,10 +6745,10 @@ function interface_dialog
         $title_label.Font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
         $theme_combo.font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
         $manage_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar1.Font                           = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $save_theme_button.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $cancel_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar2.Font                           = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $header_label1.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 1))
         $main_background_color_label.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $main_background_color_input.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
@@ -6955,10 +6875,10 @@ function interface_dialog
         $title_label.Font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
         $theme_combo.font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
         $manage_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar2.Font                           = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $save_theme_button.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $cancel_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar1.Font                           = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $header_label1.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 1))
         $main_background_color_label.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $main_background_color_input.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
@@ -7605,7 +7525,7 @@ function interface_dialog
     $editor_font_combo.width = 180
     $editor_font_combo.Anchor = 'top,right'
     $editor_font_combo.autosize = $false
-    $editor_font_combo.location                 = New-Object System.Drawing.Point(($editor_font_label.location.x + $editor_font_label.width + 5), ($y_pos + 3))
+    $editor_font_combo.location                 = New-Object System.Drawing.Point(($editor_font_label.location.x + $editor_font_label.width + 25), ($y_pos + 3))
     $editor_font_combo.font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
     $editor_font_combo.DropDownStyle = "DropDownList"
     $editor_font_combo.AccessibleName = ""; 
@@ -7621,11 +7541,9 @@ function interface_dialog
         $editor.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
         $sizer_box.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])    
         scan_text
-        #calculate_text_lengths
         $Form.refresh();
         $sizer_art.refresh();
         $Script:recent_editor_text = "Changed"
-        #calculate_text_lengths
 
     })
     $color_form.controls.Add($editor_font_combo)
@@ -7654,11 +7572,9 @@ function interface_dialog
         $editor.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
         $sizer_box.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])    
         scan_text
-        #calculate_text_lengths
         $Form.refresh();
         $sizer_art.refresh();
         $Script:recent_editor_text = "Changed"
-        #calculate_text_lengths
     })
     $color_form.controls.Add($editor_font_size_combo)
 
@@ -7820,7 +7736,6 @@ function interface_dialog
         else
         {
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
     })
     $color_form.controls.Add($text_caclulator_under_color_input);
@@ -7844,7 +7759,6 @@ function interface_dialog
             $text_caclulator_under_color_input.text = $color
             $text_caclulator_under_color_input.name = $color
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
         else
         {
@@ -7852,7 +7766,6 @@ function interface_dialog
             $text_caclulator_under_color_input.text = $color
             $text_caclulator_under_color_input.name = $color
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
     })
     $color_form.controls.Add($text_caclulator_under_color_button);
@@ -7905,10 +7818,8 @@ function interface_dialog
             [System.Windows.MessageBox]::Show($message,"Error",'Ok')     
         }
         else
-        {
-            
+        {   
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
     })
     $color_form.controls.Add($text_caclulator_over_color_input);
@@ -7932,7 +7843,6 @@ function interface_dialog
             $text_caclulator_over_color_input.text = $color
             $text_caclulator_over_color_input.name = $color
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
         else
         {
@@ -7940,7 +7850,6 @@ function interface_dialog
             $text_caclulator_over_color_input.text = $color
             $text_caclulator_over_color_input.name = $color
             $Script:recent_editor_text = "Changed"
-            #calculate_text_lengths
         }
     })
     $color_form.controls.Add($text_caclulator_over_color_button);
@@ -8149,7 +8058,7 @@ function interface_dialog
     $feeder_font_combo.width = 180
     $feeder_font_combo.autosize = $false
     $feeder_font_combo.Anchor = 'top,right'
-    $feeder_font_combo.location                 = New-Object System.Drawing.Point(($feeder_font_label.location.x + $feeder_font_label.width + 5), ($y_pos + 3))
+    $feeder_font_combo.location                 = New-Object System.Drawing.Point(($feeder_font_label.location.x + $feeder_font_label.width + 25), ($y_pos + 3))
     $feeder_font_combo.font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
     $feeder_font_combo.DropDownStyle = "DropDownList"
     $feeder_font_combo.AccessibleName = ""; 
@@ -8739,7 +8648,8 @@ function interface_dialog
         }
         else
         {
-            
+            $editor_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
+            $feeder_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
             $main_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_text_color_label.ForeColor                      = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
@@ -8789,6 +8699,8 @@ function interface_dialog
             $script:theme_settings['DIALOG_FONT_COLOR'] = "#$color"
             $dialog_font_color_input.text = $color
             $dialog_font_color_input.name = $color
+            $editor_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
+            $feeder_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
             $main_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_text_color_label.ForeColor                      = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
@@ -8823,6 +8735,8 @@ function interface_dialog
             $script:theme_settings['DIALOG_FONT_COLOR'] = "$color"
             $dialog_font_color_input.text = $color
             $dialog_font_color_input.name = $color
+            $editor_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
+            $feeder_font_label.ForeColor                          = $script:theme_settings['DIALOG_FONT_COLOR']
             $main_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_text_color_label.ForeColor                      = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
@@ -9534,6 +9448,119 @@ function interface_dialog
     })
     $color_form.controls.Add($dialog_button_background_color_button);
 
+    $y_pos = $y_pos + 35 
+    ##############################################################################################################################
+    $separator_bar2.text                        = ""
+    $separator_bar2.AutoSize                    = $false
+    $separator_bar2.BorderStyle                 = "fixed3d"
+    #$separator_bar2.ForeColor                  = $script:theme_settings['DIALOG_BOX_BACKGROUND_COLOR']
+    $separator_bar2.Anchor                      = 'top,left'
+    $separator_bar2.width                       = (($color_form.width - 50) - $spacer)
+    $separator_bar2.height                      = 1
+    $separator_bar2.location                    = New-Object System.Drawing.Point(20,$y_pos)
+    $separator_bar2.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+    $separator_bar2.TextAlign                   = 'MiddleLeft'
+    $color_form.controls.Add($separator_bar2);
+
+    $y_pos = $y_pos + 15 
+
+    #$save_theme_button.autosize = $true
+    #$save_theme_button.AutoSizeMode = 'GrowAndShrink'
+    $save_theme_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
+    $save_theme_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
+    $save_theme_button.Width     = 125
+    $save_theme_button.height     = 27
+    $save_theme_button.Location  = New-Object System.Drawing.Point((($color_form.width / 2) - ($save_theme_button.width - 5)),($y_pos));
+    $save_theme_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
+    $save_theme_button.Text      ="Save Theme"
+    $save_theme_button.Name = ""
+    $save_theme_button.Add_Click({
+        save_theme_dialog
+        
+    })
+    $color_form.controls.Add($save_theme_button)
+
+    $color_form.add_FormClosing({param($sender,$e)
+        $found = 1;
+        foreach($og in $script:theme_settings.GetEnumerator())
+        {
+            [string]$og1 = $script:theme_original[$og.key]
+            [string]$og2 = $og.value
+            if($og1 -ne $og2)
+            {
+                $found = 0;
+            }
+        }
+        if($found -eq 1)
+        {
+            #No Changes
+            $color_form.close();
+        }
+        else
+        {
+            #Changes Found
+            $message = "You haven't saved your settings, are you sure you want to leave?`n`n"
+            $yesno = [System.Windows.Forms.MessageBox]::Show("$message","!!!WARNING!!!", "YesNo" , "Information" , "Button1")
+            if($yesno -eq "Yes")
+            {
+                $form.BackColor                                       = $script:theme_original['MAIN_BACKGROUND_COLOR']   
+                $MenuBar.BackColor                                    = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $MenuBar.ForeColor                                    = $script:theme_original['MENU_TEXT_COLOR']
+                $FileMenu.BackColor                                   = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $FileMenu.ForeColor                                   = $script:theme_original['MENU_TEXT_COLOR']
+                $OptionsMenu.BackColor                                = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $OptionsMenu.ForeColor                                = $script:theme_original['MENU_TEXT_COLOR']
+                $AboutMenu.BackColor                                  = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $AboutMenu.ForeColor                                  = $script:theme_original['MENU_TEXT_COLOR']
+                $BulletMenu.BackColor                                 = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $BulletMenu.ForeColor                                 = $script:theme_original['MENU_TEXT_COLOR']
+                $script:AcronymMenu.BackColor                         = $script:theme_original['MENU_BACKGROUND_COLOR']
+                $script:AcronymMenu.ForeColor                         = $script:theme_original['MENU_TEXT_COLOR']
+                $Global:sidekick_panel.BackColor                      = $script:theme_original['ADJUSTMENT_BAR_COLOR']
+                $Global:bullet_feeder_panel.BackColor                 = $script:theme_original['ADJUSTMENT_BAR_COLOR']
+                $editor.BackColor                                     = $script:theme_original['EDITOR_BACKGROUND_COLOR']
+                $sizer_box.backcolor                                  = $script:theme_original['TEXT_CALCULATOR_BACKGROUND_COLOR']
+                $feeder_box.BackColor                                 = $script:theme_original['FEEDER_BACKGROUND_COLOR']
+                $feeder_box.ForeColor                                 = $script:theme_original['FEEDER_FONT_COLOR']
+                $Global:left_panel.BackColor                          = $script:theme_original['SIDEKICK_BACKGROUND_COLOR']
+                load_theme $script:settings['THEME']
+                build_file_menu
+                build_options_menu
+                build_about_menu
+                build_bullet_menu
+                build_acronym_menu
+                $Script:recent_editor_text = "Changed"
+                $script:sidekickgui = "New"
+                update_sidekick
+                #$color_form.close();       
+            }
+            else
+            {
+                $e.cancel = $true
+            }
+        }
+    });
+
+
+
+    
+    $cancel_theme_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
+    $cancel_theme_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
+    $cancel_theme_button.Width     = 125
+    #$cancel_theme_button.autosize = $true
+    #$cancel_theme_button.AutoSizeMode = 'GrowAndShrink'
+    $cancel_theme_button.height     = 27
+    $cancel_theme_button.Location  = New-Object System.Drawing.Point(($save_theme_button.Width + $save_theme_button.location.x  + 5),($y_pos));
+    $cancel_theme_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
+    $cancel_theme_button.Text      ="Cancel"
+    $cancel_theme_button.Add_Click({
+           $color_form.close();
+    });
+    $color_form.controls.Add($cancel_theme_button)
+
+
+
+
     $color_form.refresh();
     $color_form.ShowDialog()
     
@@ -9858,10 +9885,10 @@ function load_theme($theme)
         $title_label.Font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
         $theme_combo.font                              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
         $manage_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar1.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $save_theme_button.Font                        = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $cancel_theme_button.Font                      = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
-        $separator_bar.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
+        $separator_bar2.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
         $header_label1.Font                            = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 1))
         $main_background_color_label.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])
         $main_background_color_input.Font              = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
@@ -9963,7 +9990,6 @@ function load_theme($theme)
         #build_file_menu
         #build_bullet_menu
         #build_acronym_menu
-        #calculate_text_lengths
         $Script:recent_editor_text = "Changed"
     }
 }
@@ -11675,7 +11701,7 @@ function sidekick_display
 
             $y_pos = $y_pos + 30;
 
-            
+            $script:compression_trackbar_label = New-Object System.Windows.Forms.Label
             $compression_trackbar = New-Object System.Windows.Forms.TrackBar
             $compression_trackbar.Width = 200
             $compression_trackbar.Location = New-Object System.Drawing.Point((($Global:left_panel.width / 2) - ($compression_trackbar.Width / 2)),$y_pos)
@@ -11732,7 +11758,7 @@ function sidekick_display
 
             $y_pos = $y_pos + 35;
 
-            $script:compression_trackbar_label = New-Object System.Windows.Forms.Label
+            
             $script:compression_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $script:compression_trackbar_label.width = 200
             $script:compression_trackbar_label.Location = New-Object System.Drawing.Point((($Global:left_panel.width / 2) - ($compression_trackbar_label.Width / 2)),$y_pos)
@@ -11950,6 +11976,154 @@ function acronym_list_dialog($type)
     $acronym_list_form.ShowDialog()
 }
 ################################################################################
+######System Settings Dialog####################################################
+function system_settings_dialog
+{
+    
+    $system_settings_form = New-Object System.Windows.Forms.Form
+    $system_settings_form.FormBorderStyle = 'Fixed3D'
+    $system_settings_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
+    $system_settings_form.Location = new-object System.Drawing.Point(0, 0)
+    $system_settings_form.MaximizeBox = $false
+    $system_settings_form.Icon = $icon
+    $system_settings_form.SizeGripStyle = "Hide"
+    $system_settings_form.Width = 800
+    $system_settings_form.Height = 270
+
+    $y_pos = 10;
+
+    $title_label                          = New-Object system.Windows.Forms.Label
+    $title_label.text                     = "System Settings";
+    $title_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
+    $title_label.Backcolor                = $script:theme_settings['DIALOG_TITLE_BANNER_COLOR']
+    $title_label.Anchor                   = 'top,right'
+    $title_label.width                    = ($system_settings_form.width)
+    $title_label.height                   = 30
+    $title_label.TextAlign = "MiddleCenter"
+    $title_label.location                 = New-Object System.Drawing.Point(($rename_button.Location.x + $rename_button.width + $spacer),$y_pos)
+    $title_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
+    $system_settings_form.controls.Add($title_label);
+
+    $y_pos = $y_pos + 45
+
+
+    $clock_speed_label                          = New-Object system.Windows.Forms.Label
+    $clock_speed_label.text                     = "Application Clock Speed";
+    $clock_speed_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+    #$clock_speed_label.backcolor = "green"
+    $clock_speed_label.Anchor                   = 'top,left'
+    #$clock_speed_label.autosize = $true
+    $clock_speed_label.width                    = 300
+    $clock_speed_label.height                   = 30
+    $clock_speed_label.TextAlign = "MiddleCenter"
+    $clock_speed_label.location                 = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_label.Width / 2)),$y_pos)
+    $clock_speed_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $system_settings_form.controls.Add($clock_speed_label);
+
+    $y_pos = $y_pos + 30;
+
+    $clock_speed_trackbar_label = New-Object System.Windows.Forms.Label
+    $clock_speed_trackbar = New-Object System.Windows.Forms.TrackBar
+    $clock_speed_trackbar.Width = ($system_settings_form.Width - 200)
+    $clock_speed_trackbar.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_trackbar.Width / 2)),$y_pos)
+    $clock_speed_trackbar.Orientation = "Horizontal"
+    $clock_speed_trackbar.Height = 40
+    $clock_speed_trackbar.TickFrequency = 500
+    $clock_speed_trackbar.TickStyle = "TopLeft"
+    $clock_speed_trackbar.SetRange(100, 3000) 
+    $clock_speed_trackbar.LargeChange = 500;
+    $clock_speed_trackbar.AccessibleName = "Off"
+    $clock_speed_trackbar.value = 100
+    $clock_speed_trackbar.add_ValueChanged({
+    $value1 = 3100 - $this.value
+    $value3 = $value1 / 1000;
+
+    $this.AccessibleName = $value1
+
+    $value2 = $this.value 
+    $verb = "None"
+
+    if($value2 -le 600)
+    {
+        $verb = "Slowest`n$value3 Seconds Between Operations"
+
+    }
+    elseif($value2 -le 1200)
+    {
+        $verb = "Slow`n$value3 Seconds Between Operations"
+    }
+    elseif($value2 -le 1800)
+    {
+        $verb = "Moderate`n$value3 Seconds Between Operations"
+    }
+    elseif($value2 -le 2400)
+    {
+        $verb = "Fast`n$value3 Seconds Between Operations"
+    }
+    elseif($value2 -le 3000)
+    {
+        $verb = "Fastest`n$value3 Seconds Between Operations"
+    }
+
+    $message = "$verb"
+
+    $clock_speed_trackbar_label.text = $message             
+    })
+    $clock_speed_trackbar.Value = (3100 - $script:settings['CLOCK_SPEED'])
+           write-host  $script:settings['CLOCK_SPEED']
+
+    $y_pos = $y_pos + 30;
+
+            
+    $clock_speed_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $clock_speed_trackbar_label.width = 350
+    $clock_speed_trackbar_label.height = 60
+    $clock_speed_trackbar_label.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_trackbar_label.Width / 2)),$y_pos)
+    $clock_speed_trackbar_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+    #$clock_speed_trackbar_label.BackColor = "Green"
+    $clock_speed_trackbar_label.TextAlign = "MiddleCenter"
+    $system_settings_form.Controls.Add($clock_speed_trackbar_label)
+    $system_settings_form.controls.Add($clock_speed_trackbar)
+
+     $y_pos = $y_pos + 70;
+
+    $submit_button           = New-Object System.Windows.Forms.Button
+    $submit_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
+    $submit_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
+    $submit_button.Width     = 110
+    $submit_button.height     = 25
+    $submit_button.Location  = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($submit_button.width)),$y_pos);
+    $submit_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
+    $submit_button.Text      ="Save"
+    $submit_button.Name = ""
+    $submit_button.Add_Click({
+        $script:settings['CLOCK_SPEED'] = $clock_speed_trackbar.AccessibleName
+        $Script:Timer.Interval = $script:settings['CLOCK_SPEED']
+        write-host Clockspeed Set: $script:settings['CLOCK_SPEED']
+        update_settings;
+        $system_settings_form.close();
+
+    });
+    $system_settings_form.controls.Add($submit_button)
+
+   
+
+    $cancel_button           = New-Object System.Windows.Forms.Button
+    $cancel_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
+    $cancel_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
+    $cancel_button.Width     = 110
+    $cancel_button.height     = 25
+    $cancel_button.Location  = New-Object System.Drawing.Point((($system_settings_form.width / 2)),$y_pos);
+    $cancel_button.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'])    
+    $cancel_button.Text      ="Cancel"
+    $cancel_button.Add_Click({
+        $system_settings_form.close();
+    });
+    $system_settings_form.controls.Add($cancel_button) 
+
+    $system_settings_form.ShowDialog()
+}
+################################################################################
 ######FAQ Dialog##############################################################
 function FAQ_dialog
 {
@@ -11996,10 +12170,13 @@ function FAQ_dialog
 Q - Why is the text size different from Adobe's?
     A - Microsoft's native `"Times New Roman`" font is slightly different, and the character sizes are completely different.
 
+Q - Why does the text size not calculate by letter?
+    A - Each letter is a different number of pixels, the space provided on an EPR is not determined by the number of letters, rather by the number of pixels. 
+
 Q - Why does it run so slow?
     A - Microsoft's PowerShell language is not designed for robust GUI environments. 
           Additionally, this was written on a very powerful PC, and most AF computers do not have the resources to properly run it.
-          If your system is struggling to run it, you can change the clock speed on from 100 to a higher number e.g. (1000) to slow it down. (~line 97)
+          If your system is struggling to run it, you can change the Clock Speed under (Options -> System Settings) to a lower setting.
 
 Q - How do I report a problem?
     A - You can e-mail me at anthony.brechtel@gmail.com, but I probably won't entertain your problem unless it's a significate issue or you've donated to the project.
@@ -12009,9 +12186,6 @@ Q - I'd like to request a new feature?
 
 Q - Why not include a list of bullets?
     A - Bullets contain a large amount of OPSEC material in them, I didn't feel comfortable publishing a list of bullets.
-
-Q - Why did you make this?
-    A - I like programming, I think it's fun, and I wanted a useful/fun challenge.
 
 Q - Why can't I import/export to/from Abobe PDF files?
     A - Adobe has security features and a proprietary API. It is not very friendly to outside applications. 
@@ -12030,38 +12204,10 @@ Q - I hate this program.
     A - Not a question, but you don't have to use it.
 
 Q - Did anyone help you?
-    A - My wife did some testing, but most of the help I received was from the thousands of anonymous users on the web.
+    A - My wife did some testing, but most of the help I received was from the thousands of anonymous programmers on the web.
 
-Q - Do you want to thank anyone?
-    A - SOOOO MANY PEOPLE! (Don't be offended if I forgot to mention you, my memory is pretty Sh*t) (In order of history)      
-        Kathleen H. Gonnelly (My Mom - taught me to work hard, and earn your keep)
-        Vincent V. Brechtel (My Dad - he laid the ground work for everything I know)
-        SMSgt Justine M. Brechtel (My wife, my inspiration, and my rock)
-        MSgt Colleen Raffery (Yea, you're here too, how could I do an MFR without you?)
-        Col Heather Blackwell (Former supportive commander - you still owe me a game of chess)
-        Col Patrice O. Holmes (Awesome former Commander - saved my career 2x)
-        MSgt Paul Weyland (You took the time to teach me how to write)
-        Col John C. Maneri (Great Commander who put his people before his mission)
-        MSgt Daniel Spurlock (Took me under his wing)
-        MSgt Brian Smith (You're awesome! Hope you making bank in realistate) 
-        MSgt Ted W. Lee (Pretty much the best NCO that ever lived)
-        CMSgt Raymond Artis (Best Chief you'll ever meet - never beat him in a game of chess)
-        Former Co-Workers (If you've worked with me, I probably learned something from you)
-
-        
-
-
-
-
-
-      
-
-    
-    
-    
-    
-    
-    
+Q - Why did you make this?
+    A - I like programming, I think it's fun, and I wanted a useful/fun challenge.
     "
 
     $FAQ_box.SelectAll();
@@ -12238,8 +12384,7 @@ function about_dialog
 ######Main Sequence Start#######################################################
 initial_checks;
 load_settings;
-$Script:Timer.Start()
-$Script:Timer.Add_Tick({Idle_Timer})
+
 load_theme
 load_character_blocks;
 load_dictionary;
