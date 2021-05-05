@@ -2968,7 +2968,10 @@ function xls_to_csv($input_file,$output_file,$mode)
             foreach ($ws in $workbook.Worksheets)
             {
                 $save_name = "$base_directory\" + $base_name + "_" + $ws.Name + ".csv"
-                $ws.SaveAs($save_name, 62)
+                #$ws.SaveAs($save_name, 62) #xlCSVUTF8
+                $xlCSVUTF8 = 62
+                $ws.SaveAs($save_name,$xlCSVUTF8);
+                write-host cow;
                 $output_names.add($save_name,"");
             }
             $objExcel.Quit()           
