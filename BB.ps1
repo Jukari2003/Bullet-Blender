@@ -33,7 +33,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.0 (Alpha Build - 25 Apr 2021)"
+$script:program_version = "1.1 (Alpha - 13 May 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
@@ -1159,7 +1159,7 @@ function import_bullet_processing($input_file,$output_file)
     $processing_file = "";
     if($input_ext -match ".xls$|.xlsx$")
     {    
-        $output = xls_to_csv $input_file $processing_area 3
+        [Array]$output = xls_to_csv $input_file $processing_area 3
         $processing_file = $output.Keys | % ToString #Convert Hash Return to String
     }
     elseif($input_ext -match ".csv$|.txt$")
@@ -1194,6 +1194,11 @@ function import_bullet_processing($input_file,$output_file)
         $line_counter++;
         $go = 1;
         $line = $line -replace "’|â€™","'"
+        $line = $line -replace " | | ", " "
+        $line = $line -replace "  "," "
+        $line = $line -replace "\udfd7|\udbc2|\u00a0", " "
+        $line = $line -replace "\u2014|\u2013", "-"
+        $line = $line -replace "\u201c|\u201d", "`""
         #write-host $line
        
         #####################################
@@ -1201,7 +1206,7 @@ function import_bullet_processing($input_file,$output_file)
         [System.Collections.ArrayList]$line_split = @()
         if(!($input_ext -match ".txt$|.docx$|.doc"))
         {
-            $line_split = csv_line_to_array $line
+            [Array]$line_split = csv_line_to_array $line
         }
         else
         {
@@ -1213,11 +1218,7 @@ function import_bullet_processing($input_file,$output_file)
             $section = $section.trim()
             if(($section -match "^-") -and ($section.length -gt 70))
             {
-                $section = $section -replace " | | ", " "
-                $section = $section -replace "  "," "
-                $section = $section -replace "\udfd7|\udbc2|\u00a0", " "
-                $section = $section -replace "\u2014\u2013", "-"
-                $section = $section -replace "\u201c|\u201d", "`""
+                
 
                 #############################################################################
                 ##Calculate Bullet Size
@@ -1326,9 +1327,10 @@ function import_bullet_processing($input_file,$output_file)
         #write-host A= $bullet.key = $bullet.value
     }
     $writer.close()
-    write-host
-    write-host "Duplicates Found: $duplicates"
-    write-host Bullets Found: $bullets.get_count();
+    #write-host
+    #write-host "Duplicates Found: $duplicates"
+    #write-host Bullets Found: $bullets.get_count();
+    $bullet_count = $bullets.get_count();
 
 
     if(Test-Path -LiteralPath $output_file)
@@ -1338,7 +1340,9 @@ function import_bullet_processing($input_file,$output_file)
         build_bullet_menu
         
         $Script:recent_editor_text = "Changed"
-
+        $message = "$bullet_count Bullets Found`n$duplicates Duplicates Found"
+        [System.Windows.MessageBox]::Show($message,"Bullets",'Ok')
+        #Write-host Complete
         $success = 1;
     }
   
@@ -1672,7 +1676,7 @@ function load_acronyms
             $reader = [System.IO.File]::OpenText("$dir\Resources\Acronym Lists\$file")
             while($null -ne ($line = $reader.ReadLine()))
             {
-                $line_split = csv_line_to_array $line
+                [Array]$line_split = csv_line_to_array $line
                 [string]$key = $line_split[0] + "::" + $line_split[1]
                 if($line_split[0] -and $line_split[1])
                 {
@@ -1813,7 +1817,7 @@ function import_bullet_form
     $import_bullet_form.SizeGripStyle = "Hide"
     $import_bullet_form.Size='500,170'
     $import_bullet_form.Text = "Import Bullet Bank"
-    $import_bullet_form.TopMost = $True
+    #$import_bullet_form.TopMost = $True
     $import_bullet_form.TabIndex = 0
     $import_bullet_form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 
@@ -2213,7 +2217,7 @@ function import_acronym_processing($input_file,$output_file)
     $processing_file = "";
     if($input_ext -match ".xls|.xlsx")
     {    
-        $output = xls_to_csv $input_file $processing_area 1
+        [Array]$output = xls_to_csv $input_file $processing_area 1
         $processing_file = $output.Keys | % ToString #Convert Hash Return to String
     }
     elseif($input_ext -match ".csv")
@@ -2230,6 +2234,7 @@ function import_acronym_processing($input_file,$output_file)
     #write-host Processing: $processing_file
     $reader = [System.IO.File]::OpenText("$processing_file")
     $line_counter = 0;
+    $acro_count = 0;
     $tracker = new-object System.Collections.Hashtable
     while($null -ne ($line = $reader.ReadLine()))
     {
@@ -2237,6 +2242,7 @@ function import_acronym_processing($input_file,$output_file)
         $go = 1;
         $multi = @{};
         $line = $line -replace "’|â€™","'"
+        $line = $line -replace " | | ", " "
         if($line_counter -eq 1)
         {
             #Remove Header
@@ -2246,15 +2252,32 @@ function import_acronym_processing($input_file,$output_file)
                 #write-host "REMOVED Line $line_counter = $line"
             }
         }
-        $line_split = csv_line_to_array $line
+        [Array]$line_split = csv_line_to_array $line
+
+        ################Basic Elimination
         $line_split[0] = $line_split[0].trim()
-        $line_split[1] = $line_split[1].trim();
+        if(($line_split[0] -eq "") -or ($line_split[0] -match "^- "))
+        {
+            $go = 0;
+        }
+        if($line_split[1])
+        {
+            $line_split[1] = $line_split[1].trim();
+            if(($line_split[1] -eq "") -or ($line_split[1] -match "^- "))
+            {
+                $go = 0;
+            }
+        }
+        else
+        {
+            $go = 0;
+        }
         if($line_split[2])
         {
             $go = 0; #More than two columns
             #write-host "REMOVED $line_counter = $line"
         }
-
+        #######################################
         if(($line_split[0]) -and ($line_split[1]) -and ($go -eq 1))
         {   
             $par_split1 = $line_split[0] -replace "\)",''
@@ -2287,7 +2310,7 @@ function import_acronym_processing($input_file,$output_file)
         }
 
         #############Parenthesis Matching
-        if(($go -eq 1) -and (($line_split[0] -match "\(") -and ($line_split[0] -match "\)")) -or (($line_split[1] -match "\(") -and ($line_split[1] -match "\)")))
+        if(($go -eq 1) -and (($line_split[0] -match "\(") -and ($line_split[0] -match "\)")) -or (($go -eq 1) -and ($line_split[1] -match "\(") -and ($line_split[1] -match "\)")))
         {
             $par_split1 = $line_split[0] -replace "\)",''
             $par_split1 = $par_split1 -split "\(".trim();
@@ -2418,6 +2441,7 @@ function import_acronym_processing($input_file,$output_file)
                 if(!($tracker.contains($line_split[1])))
                 {
                     $tracker.Add($line_split[1],$line_split[0]);
+                    $acro_count++;
                     #write-host "Added $line_counter = $line"
                 }
                 else
@@ -2459,8 +2483,10 @@ function import_acronym_processing($input_file,$output_file)
         build_acronym_menu
         
         $Script:recent_editor_text = "Changed"
-
+        $message = "$acro_count Acronyms"
+        [System.Windows.MessageBox]::Show($message,"Acronyms Added",'Ok')
         $success = 1;
+        
     }
   
     return $success
@@ -2956,11 +2982,41 @@ function xls_to_csv($input_file,$output_file,$mode)
 
         if($mode -eq 1)
         {
-            $workbook.SaveAs($output_file,62)
+            #$workbook.SaveAs($output_file,62)
+            #####################
+            try
+            {
+                $workbook.SaveAs($output_file,62); #Unicode CSV
+            }
+            catch
+            {
+                write-host "WARNING: Failed Unicode Saving: $save_name"
+                try
+                {
+                    $workbook.SaveAs($output_file,6);#Standard CSV
+                }
+                catch
+                {
+                    write-host "FATAL ERROR: Failed Unicode Saving: $save_name"
+                }
+            }
+            #####################
             $objExcel.DisplayAlerts = $True
             $output_names.add($output_file,"");
             $objExcel.Quit()
-            #[System.Runtime.Interopservices.Marshal]::ReleaseComObject($objExcel)
+            ##############################
+            ######Exit Excel Forcefully
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($objExcel)
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook)
+            #[System.Runtime.Interopservices.Marshal]::ReleaseComObject($ws)
+
+            Remove-Variable objExcel
+            Remove-Variable workbook
+            #Remove-Variable ws
+
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            ##############################
              
         }
         if($mode -match "^2$|^3$")
@@ -2968,13 +3024,39 @@ function xls_to_csv($input_file,$output_file,$mode)
             foreach ($ws in $workbook.Worksheets)
             {
                 $save_name = "$base_directory\" + $base_name + "_" + $ws.Name + ".csv"
-                #$ws.SaveAs($save_name, 62) #xlCSVUTF8
-                $xlCSVUTF8 = 62
-                $ws.SaveAs($save_name,$xlCSVUTF8);
-                write-host cow;
+                #####################
+                try
+                {
+                    $ws.SaveAs($save_name,62); #Unicode CSV
+                }
+                catch
+                {
+                    write-host "WARNING: Failed Unicode Saving: $save_name"
+                    try
+                    {
+                        $ws.SaveAs($save_name,6);#Standard CSV
+                    }
+                    catch
+                    {
+                        write-host "FATAL ERROR: Failed Unicode Saving: $save_name"
+                    }
+                }
+                #####################
                 $output_names.add($save_name,"");
             }
-            $objExcel.Quit()           
+            $objExcel.Quit()
+            ######Exit Excel Forcefully
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($objExcel)
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook)
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ws)
+
+            Remove-Variable objExcel
+            Remove-Variable workbook
+            Remove-Variable ws
+
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            ##############################         
         }
         if($mode -eq 3)
         {
@@ -3040,6 +3122,17 @@ function doc_to_txt($input_file,$output_file)
     $Document.SaveAs([ref]$output_file,[ref] 7,$def,$def,$def,$def,$def,$def,$def,$def,$def,65001)
     $Document.Close()
     $Word.Quit()
+    ##############################
+    ######Exit Word Forcefully
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Word)
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Document)
+
+    Remove-Variable Word
+    Remove-Variable Document
+
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+    ##############################
 
     ###Convert UTF8 to Unicode
     $MyRawString = Get-Content -Raw $output_file
@@ -3484,7 +3577,7 @@ function thesaurus_lookup($lookup_word)
                     {
                         if(($line -match ",$search_word,|,$search_word2,|,$search_word3,|,$search_word4,") -or (($scan_attempts -ge 4) -and ($line -match ",$word")))
                         {
-                            $line_split = csv_line_to_array $line
+                            [Array]$line_split = csv_line_to_array $line
                             foreach($line_word in $line_split)
                             {
                                 if(($line_word -ne "") -and ($line_word -ne "$word") -and ($line_word -ne "$search_word2") -and ($line_word -ne "$search_word3") -and ($line_word -ne "$search_word4"))
@@ -13248,7 +13341,7 @@ function about_dialog
     $about_form.MaximizeBox = $false
     $about_form.Icon = $icon
     $about_form.SizeGripStyle = "Hide"
-    $about_form.Width = 600
+    $about_form.Width = 700
     $about_form.Height = 600
 
     $y_pos = 10;
@@ -13372,21 +13465,41 @@ function about_dialog
     $version_box.ForeColor = $script:theme_settings['EDITOR_FONT_COLOR']
     $version_box.ScrollBars = "Vertical"
     $version_box.AccessibleName = "";
-    $version_box.text = "Version 1.0:
+    $version_box.text = "
     --------------------------------------------------------------------
-    Project Started: 10 Apr 2021
+    Version 1.1:
+    --------------------------------------------------------------------
+    Date: 13 May 2021
+    Bug Fixed: Excel/Word Comm Object failing to release
+    Bug Fixed: Some platforms not allowing Unicode CSV saves
+    Bug Fixed: csv_to_line function not returning Array
+    Bug Fixed: Refined Acronym processing thresholds
+    Bug Fixed: Feeder Function no longer continuously runs
+    Bug Fixed: Text Calculator Rebuilt to prevent flashing
+    Bug Fixed: Text Compression Not working as intended
+    Known Issue: System memory expands until PowerShell crashes
+    Known Issue: Saving Theme sometimes causes system crash
+    Known Issue: Sidekick does not always display properly
+
+    --------------------------------------------------------------------
+    Version 1.0:
+    --------------------------------------------------------------------
+    Project Started: 26 January 2021
     Feature Added: Text Editor
     Feature Added: Bullet Feeder
-    Feature Added: Text Size Calcuation
+    Feature Added: Text Size Calculation
     Feature Added: Bullet Lists
     Feature Added: Acronym Scanning
     Feature Added: Acronym Lists
-    Feature Added: Package Managment
+    Feature Added: Package Management
     Feature Added: Themes
     Feature Added: Error Detection
     Feature Added: Metrics
     Feature Added: Text Compression
-    --------------------------------------------------------------------
+    Project Released: 27 April 2021
+
+    -------------------------------------------------------------------- 
+
     "
 
 
