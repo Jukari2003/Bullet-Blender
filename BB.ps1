@@ -2019,7 +2019,7 @@ function import_acronym_form
     $import_acronym_form.SizeGripStyle = "Hide"
     $import_acronym_form.Size='500,170'
     $import_acronym_form.Text = "Import Acronyms and/or Abbreviations"
-    $import_acronym_form.TopMost = $True
+    #$import_acronym_form.TopMost = $True
     $import_acronym_form.TabIndex = 0
     $import_acronym_form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 
@@ -12160,10 +12160,24 @@ function sidekick_display
                             #write-host Match Found $match.index - $scope_start - $scope_end
                             if(($match.index -ge $scope_start)  -and (($match.index + $match.value.length) -le $scope_end))
                             {
-                                $editor.SelectionStart = $match.index
-                                $editor.SelectionLength = $match.value.length
-                                $editor.selectionbackcolor = [System.Drawing.ColorTranslator]::FromHtml($script:theme_settings['EDITOR_HIGHLIGHT_COLOR'])
-                                $editor.DeselectAll();
+                                if($match.index -ne 0)
+                                {
+                                    $before = $editor.text.substring(($match.index -1),1);
+                                }
+                                if($before -match "-|;|\s|/|\.")
+                                {
+                                    if(($match.index + $match.value.length + 1) -lt $editor.text.Length)
+                                    {
+                                        $after = $editor.text.substring(($match.index + $match.value.length),1);
+                                    }
+                                    if(!($after -match "\w"))
+                                    {
+                                        $editor.SelectionStart = $match.index
+                                        $editor.SelectionLength = $match.value.length
+                                        $editor.selectionbackcolor = [System.Drawing.ColorTranslator]::FromHtml($script:theme_settings['EDITOR_HIGHLIGHT_COLOR'])
+                                        $editor.DeselectAll();
+                                    }
+                                }
                             }
                         }
                     }
@@ -12214,10 +12228,14 @@ function sidekick_display
                     $value = $this.SelectedItem -replace "Using both: ",""
                     ($word1,$word2) = $value -split ' & '
                     $word1c = $word1.substring(0,1).toupper() + $word1.substring(1)  
-                    $word2c = $word2.substring(0,1).toupper() + $word2.substring(1)  
+                    $word2c = $word2.substring(0,1).toupper() + $word2.substring(1)
+                    $word1l = $word1.substring(0,$word1.Length).toupper() 
+                    $word2l = $word2.substring(0,$word2.Length).toupper()
+
+                    write-host $word1 $word2
 
 
-                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word1c))|$([regex]::escape($word2c))"
+                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word1c))|$([regex]::escape($word2c))|$([regex]::escape($word1l))|$([regex]::escape($word2l))"
                     $matches = [regex]::Matches($editor.text, $pattern)
                     
                     $editor.SelectAll();
@@ -12228,9 +12246,10 @@ function sidekick_display
                     {  
                         foreach($match in $matches)
                         {
-                            if(((($match.index - 1) -ge 0 ) -and (!($editor.text.Substring(($match.index - 1),1) -match "[A-Z0-9]"))) -or (($match.index -1) -lt 0))
+                            write-host $match.value
+                            if(((($match.index - 1) -ge 0 ) -and (!($editor.text.Substring(($match.index - 1),1) -match "\w"))) -or (($match.index -1) -lt 0))
                             {
-                                if(((($match.index + $match.value.length + 1) -le $editor.text.length ) -and (!($editor.text.Substring(($match.index + $match.value.length),1) -match "[A-Z0-9]"))) -or (($match.index + $match.value.length) -eq $editor.text.length) -or ($editor.text.Substring(($match.index + $match.value.length - 1),1) -match '/'))
+                                if(((($match.index + $match.value.length + 1) -le $editor.text.length) -and (!($editor.text.Substring(($match.index + $match.value.length),1) -match "\w"))) -or (($match.index + $match.value.length) -eq $editor.text.length) -or ($editor.text.Substring(($match.index + $match.value.length - 1),1) -match '/'))
                                 {
                                     $editor.SelectionStart = $match.index
                                     $editor.SelectionLength = $match.value.length
@@ -12379,10 +12398,12 @@ function sidekick_display
                     $value = $this.SelectedItem -replace "Using both: ",""
                     ($trash,$word1) = $value -split ' - '
                     $word2 = $word1;
-                    $word2 = $word1.substring(0,1).toupper() + $word1.substring(1)  
+                    $word2 = $word1.substring(0,1).toupper() + $word1.substring(1)
+                    $word3 = $word1.substring(0,1).tolower() + $word1.substring(1) 
 
+                    #write-host $word1 = $word2
 
-                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))"
+                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word3))"
                     $matches = [regex]::Matches($editor.text, $pattern)
                     
                     $editor.SelectAll();
@@ -13477,6 +13498,7 @@ function about_dialog
     Bug Fixed: Feeder Function no longer continuously runs
     Bug Fixed: Text Calculator Rebuilt to prevent flashing
     Bug Fixed: Text Compression Not working as intended
+    Bug Fixed: Refined Repeated Usage Detection
     Known Issue: System memory expands until PowerShell crashes
     Known Issue: Saving Theme sometimes causes system crash
     Known Issue: Sidekick does not always display properly
