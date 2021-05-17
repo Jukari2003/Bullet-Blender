@@ -10356,20 +10356,20 @@ function interface_dialog
     $color_form.controls.Add($save_theme_button)
 
     $color_form.add_FormClosing({param($sender,$e)
-        $found = 1;
+        $found = 0;
         foreach($og in $script:theme_settings.GetEnumerator())
         {
             [string]$og1 = $script:theme_original[$og.key]
             [string]$og2 = $og.value
             if($og1 -ne $og2)
             {
-                $found = 0;
+                $found = 1;
             }
         }
-        if($found -eq 1)
+        if($found -eq 0)
         {
-            #No Changes
-            $color_form.close();
+            #No Changes          
+            #$sender.close();     #Irrelevant in closing form, could be the culprit in crashes.
         }
         else
         {
@@ -13362,7 +13362,7 @@ function about_dialog
     $about_form.MaximizeBox = $false
     $about_form.Icon = $icon
     $about_form.SizeGripStyle = "Hide"
-    $about_form.Width = 700
+    $about_form.Width = 800
     $about_form.Height = 600
 
     $y_pos = 10;
@@ -13487,6 +13487,12 @@ function about_dialog
     $version_box.ScrollBars = "Vertical"
     $version_box.AccessibleName = "";
     $version_box.text = "
+    --------------------------------------------------------------------
+    Version 1.2:
+    --------------------------------------------------------------------
+    Bug Fixed?: Closing of Themes Dialog causes Bullet Blender & ISE to crash. 
+        (I was unable to replicate this error on my computer so It might still exist) 
+
     --------------------------------------------------------------------
     Version 1.1:
     --------------------------------------------------------------------
