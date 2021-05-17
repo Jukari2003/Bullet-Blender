@@ -10,8 +10,6 @@ Air Force Bullet Generation System
         - Once PowerShell ISE is opened. Click the Green Play Arrow.
         - Success!
 
-
-
     Possible Errors:
         - Execution-Policy 
             - Some systems may prevent you from executing the script even in PowerShell ISE.
@@ -21,6 +19,7 @@ Air Force Bullet Generation System
                          -  Set-ExecutionPolicy Unrestricted
                     - Type 
                         -  Y
+  
         - You're on a MAC
             - You will need to install PowerShell for MAC
                 - https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-macos?view=powershell-7.1
