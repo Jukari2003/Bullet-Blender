@@ -33,7 +33,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.1 (Alpha - 13 May 2021)"
+$script:program_version = "1.2 (Alpha - 17 May 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
