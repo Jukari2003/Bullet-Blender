@@ -22,4 +22,5 @@ Air Force Bullet Generation System
                     - Type 
                         -  Y
         - You're on a MAC
-            - PowerShell will not run on a MAC.
+            - You will need to install PowerShell for MAC
+                - https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-macos?view=powershell-7.1
