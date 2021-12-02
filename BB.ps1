@@ -36,7 +36,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.3 (Beta - 2 Dec 2021)"
+$script:program_version = "1.3.1 (Beta - 2 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
@@ -4167,7 +4167,10 @@ function update_sizer_box
         }
         if($found -eq 0)
         {
-            $remove_bullets.add($bullet_size.key,"");
+            if(!($remove_bullets.contains($bullet_size.key)))
+            {
+                $remove_bullets.add($bullet_size.key,"");
+            }
         }
     }
     foreach($remove in $remove_bullets.GetEnumerator())
@@ -7028,7 +7031,7 @@ function save_package_dialog
 function manage_package_dialog
 {
     save_history
-    write-host $dir\Resources\Packages
+    #write-host $dir\Resources\Packages
 
     $packages = Get-ChildItem -LiteralPath "$dir\Resources\Packages" -Directory -Force -ErrorAction SilentlyContinue #| Select-Object FullName
 
