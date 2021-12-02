@@ -5,7 +5,10 @@
 #                                                                              #
 ################################################################################
 clear-host
-$script:memBefore = (Get-Process -id $pid).WS
+#Set-StrictMode -version latest
+#Set-StrictMode -Off
+$script:memBefore = (Get-Process -id $PID | Sort-Object WorkingSet64 | Select-Object Name,@{Name='WorkingSet';Expression={($_.WorkingSet64)}})
+$script:memBefore = [System.Math]::Round(($script:memBefore.WorkingSet)/1mb, 2)
 $scriptpath = $MyInvocation.MyCommand.Path
 $dir = Split-Path $scriptpath
 Set-Location $dir
@@ -33,10 +36,11 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.2 (Alpha - 17 May 2021)"
+$script:program_version = "1.3 (Beta - 2 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
+$script:log_mem_change = $script:memBefore #Logs Difference In time
 $script:print_to_console = 0;              #Turns on Console Log           1=On 0=Off
 $script:print_to_log = 0;                  #Turns on File Log              1=On 0=Off
 $script:var_size_detection = 0;            #Turns on Variable size tracker 1=On 0=Off
@@ -81,6 +85,11 @@ $script:thesaurus_job = "";                #Tracks Job for Thesaurus lookups
 $script:global_thesaurus = @{};            #Hand-off for Thesaurus
 $script:thesaurus_menu = "";               #Hand-off menu to functions
 
+##Word Hippo
+$script:global_word_hippo =                #Hand-off for Word Hippo
+$script:word_hippo_job = ""                #Tracks Job for Word Hippo lookups
+$script:word_hippo_menu = "";               #Hand-off menu to functions
+
 ##Bullet Vars
 $Script:bullet_banks = @{};                #Tracks Bullet Bank Lists Enabled/Disabled Status
 $Script:bullet_bank = @{};                 #All Currently Loaded Bullets for Feeder
@@ -100,6 +109,7 @@ $script:color_picker = "";                 #Transfers color to Colorpicker
 $script:sidekick_job = "";                 #Tracks the job for Sidekick metrics/activity
 $script:sidekick_results = "";             #Retrieves Sidekick Job Results
 $script:sidekickgui = "New";               #Tracks Rebuild of Sidekick Window
+$script:Format_error = "";
 
 ##History Vars
 $script:old_text = "";                     #Used for tracking changes between new editor text and previous text
@@ -115,6 +125,7 @@ $script:save_history_job = "";             #Tracks the job of saving history
 $script:save_history_timer = Get-Date      #Tracks the last time a job was ran
 $script:save_history_tracker = 0;          #Tracks the last place in history that was saved
 
+
 ##Calculate Text Size Vars
 $script:bullets_and_sizes  = new-object System.Collections.Hashtable #Tracks current bullet sizes
 $script:bullets_and_lines  = new-object System.Collections.Hashtable #Tracks location of bullets
@@ -127,6 +138,9 @@ if($Script:Timer){$Script:Timer.Dispose();}
 $Script:Timer = New-Object System.Windows.Forms.Timer                #Main system timer, most functions load through this timer
 $Script:Timer.Interval = 1000
 $Script:CountDown = 1
+##Variable Flushing
+$script:main_vars = @()                                                 #Contains List of Startup Variables
+$script:main_vars = Get-Variable | Select-Object -ExpandProperty Name   #Contains List of Startup Variables
 
 ################################################################################
 ######Main######################################################################
@@ -310,7 +324,7 @@ function main
         {
             if($editor.SelectedText.length -eq 0)
             {
-                [Clicker]::LeftClickAtPoint($Pos.X,$Pos.Y) #Sends Left Click to move Caret
+                [Clicker]::LeftClickAtPoint([System.Windows.Forms.Cursor]::Position.X,[System.Windows.Forms.Cursor]::Position.Y) #Sends Left Click to move Caret
                 $script:clicked_right = 1;
             }
             else
@@ -476,12 +490,12 @@ function main
     })
     $script:Form.Controls.Add($sidekick_panel)
 
-    #$left_panel                              = New-Object system.Windows.Forms.Panel
+    #$left_panel                             = New-Object system.Windows.Forms.Panel
     $left_panel.height                       = ($sidekick_panel.height)
     $left_panel.width                        = ($sidekick_panel.width - 5)
     $left_panel.BackColor                    = $script:theme_settings['SIDEKICK_BACKGROUND_COLOR']
     $left_panel.Anchor                       = 'top,left'
-    $left_panel.Location                     = New-Object System.Drawing.Point(5,0)
+    $left_panel.Location                     = New-Object System.Drawing.Point(5,-5) #Modified Y pos to -5 from 0 (Ver 1.3 Update)
     $sidekick_panel.Controls.Add($left_panel)
     
     #################################################################################
@@ -498,6 +512,7 @@ function main
     $script:Form.Controls.Add($sizer_box)
     
     Log "Main End"
+    Log "BLANK"
     $script:Form.ShowDialog()
 }
 ################################################################################
@@ -864,7 +879,6 @@ function manage_bullets_dialog
     $edit_bullets_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $edit_bullets_form.Location = new-object System.Drawing.Point(0, 0)
     $edit_bullets_form.MaximizeBox = $false
-    $edit_bullets_form.Icon = $icon
     $edit_bullets_form.SizeGripStyle = "Hide"
     $edit_bullets_form.Width = 800
     if($item_number -eq 0)
@@ -897,7 +911,7 @@ function manage_bullets_dialog
     $title_label.width                    = ($edit_bullets_form.width)
     $title_label.height                   = 30
     $title_label.TextAlign = "MiddleCenter"
-    $title_label.location                 = New-Object System.Drawing.Point(($rename_button.Location.x + $rename_button.width + $spacer),$y_pos)
+    $title_label.location                 = New-Object System.Drawing.Point((($edit_bullets_form.width / 2) - ($title_label.width / 2)),$y_pos)
     $title_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
     $edit_bullets_form.controls.Add($title_label);
 
@@ -1174,7 +1188,7 @@ function import_bullet_processing($input_file,$output_file)
     }
     else
     {
-        write-host "Invalid File type"
+        #write-host "Invalid File type"
         return 0;
     }
 
@@ -1233,7 +1247,7 @@ function import_bullet_processing($input_file,$output_file)
                     else
                     {
                         $utf = '{0:x4}' -f [int][char]$character + ""
-                        write-host "Missing Character Block For `"$character`" ($utf)"
+                        #write-host "Missing Character Block For `"$character`" ($utf)"
                         #exit
                     }
                 }
@@ -1254,7 +1268,7 @@ function import_bullet_processing($input_file,$output_file)
                         {
                             if($match.index -ne 1)
                             {
-                                if(($stop -ne 1) -and ($size -gt 2719))
+                                if(($stop -ne 1) -and ($size -gt 2718))
                                 {
                                     $current_space = $section.substring($match.index,1)
                                     $current_size = $character_blocks["$current_space"]
@@ -1263,7 +1277,7 @@ function import_bullet_processing($input_file,$output_file)
                                     $section = $section.remove($match.index,1)
                                     $section = $section.insert($match.index,$space_type.key)
                                 }
-                                if($size -le 2719)
+                                if($size -le 2718)
                                 {
                                     $stop = 1;
                                     #$size = $size
@@ -1383,7 +1397,6 @@ function create_bullet_bank
     $create_bullet_bank_form.Location = new-object System.Drawing.Point(0, 0)
     $create_bullet_bank_form.Size = new-object System.Drawing.Size(305, 120)
     $create_bullet_bank_form.MaximizeBox = $false
-    $create_bullet_bank_form.Icon = $icon
     $create_bullet_bank_form.SizeGripStyle = "Hide"
     $create_bullet_bank_form.Text = "Create Bullet Bank"
     #$create_bullet_bank_form.TopMost = $True
@@ -1429,7 +1442,7 @@ function create_bullet_bank
         {
             $errors += "You must provide a name."
         }
-        write-host "$dir\Resources\Bullet Banks\$file"
+        #write-host "$dir\Resources\Bullet Banks\$file"
         if(Test-path "$dir\Resources\Bullet Banks\$file")
         {
             $errors += "Bullet Bank already exists."
@@ -1486,8 +1499,7 @@ function create_bullet_bank
 ######Update Feeder#############################################################
 function update_feeder
 {
-    [string]$status = $script:feeder_job.state
-    if($status -eq "")
+    if($script:feeder_job -eq "")
     {
         ############################################
         #Start Job
@@ -1556,7 +1568,7 @@ function update_feeder
     }
     else
     {   
-        if($status -eq "Completed")
+        if($script:feeder_job.state -eq "Completed")
         {   
             $text = Receive-Job -Job $script:feeder_job
             if($text -ne $feeder_box.text)
@@ -1571,7 +1583,7 @@ function update_feeder
                 ############Fix Missing Half Spaces
                 $pattern = " | | "
                 $matches = [regex]::Matches($feeder_box.text, $pattern)
-                if($matches.Success)
+                if($matches)
                 {  
                     foreach($match in $matches)
                     {
@@ -1677,16 +1689,19 @@ function load_acronyms
             while($null -ne ($line = $reader.ReadLine()))
             {
                 [Array]$line_split = csv_line_to_array $line
-                [string]$key = $line_split[0] + "::" + $line_split[1]
                 if($line_split[0] -and $line_split[1])
                 {
-                    if(!($script:acronym_list.ContainsKey("$key")))
+                    [string]$key = $line_split[0] + "::" + $line_split[1]
+                    if($line_split[0] -and $line_split[1])
                     {
-                                $script:acronym_list.Add("$key","");
-                    }
-                    else
-                    {
-                        #write-host "Duplicate: $line"
+                        if(!($script:acronym_list.ContainsKey("$key")))
+                        {
+                                    $script:acronym_list.Add("$key","");
+                        }
+                        else
+                        {
+                            #write-host "Duplicate: $line"
+                        }
                     }
                 }
             }
@@ -1705,7 +1720,6 @@ function create_acronym_list
     $create_acronym_list_form.Location = new-object System.Drawing.Point(0, 0)
     $create_acronym_list_form.Size = new-object System.Drawing.Size(290, 120)
     $create_acronym_list_form.MaximizeBox = $false
-    $create_acronym_list_form.Icon = $icon
     $create_acronym_list_form.SizeGripStyle = "Hide"
     $create_acronym_list_form.Text = "Create New Acronym or Abbreviation List"
     #$create_acronym_list_form.TopMost = $True
@@ -1733,7 +1747,6 @@ function create_acronym_list
     $acronym_list_name_input.height                   = 30
     $acronym_list_name_input.location                 = New-Object System.Drawing.Point(125,12)
     $acronym_list_name_input.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 2))
-    $acronym_list_name_input.text                     = "$column_text"
     $create_acronym_list_form.controls.Add($acronym_list_name_input);
 
     $submit_button           = New-Object System.Windows.Forms.Button
@@ -1813,7 +1826,6 @@ function import_bullet_form
     $import_bullet_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $import_bullet_form.Location = new-object System.Drawing.Point(0, 0)
     $import_bullet_form.MaximizeBox = $false
-    $import_bullet_form.Icon = $icon
     $import_bullet_form.SizeGripStyle = "Hide"
     $import_bullet_form.Size='500,170'
     $import_bullet_form.Text = "Import Bullet Bank"
@@ -1897,7 +1909,7 @@ function import_bullet_form
     $browse_button.Add_Click({
 
         $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-        $OpenFileDialog.initialDirectory = $initialDirectory
+        $OpenFileDialog.initialDirectory = "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
         #$OpenFileDialog.filter = "All files (*.*)| *.*"
         $OpenFileDialog.filter = "Files (*.xls, *.xlsx, *.csv, *.txt, *.doc, *.docx)|*.xls;*.xlsx;*.csv;*.txt;*.doc;*.docx"
         $OpenFileDialog.ShowDialog() | Out-Null
@@ -2015,7 +2027,6 @@ function import_acronym_form
     $import_acronym_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $import_acronym_form.Location = new-object System.Drawing.Point(0, 0)
     $import_acronym_form.MaximizeBox = $false
-    $import_acronym_form.Icon = $icon
     $import_acronym_form.SizeGripStyle = "Hide"
     $import_acronym_form.Size='500,170'
     $import_acronym_form.Text = "Import Acronyms and/or Abbreviations"
@@ -2227,7 +2238,7 @@ function import_acronym_processing($input_file,$output_file)
     }
     else
     {
-        write-host "Invalid File type"
+        #write-host "Invalid File type"
         return 0;
     }
 
@@ -2260,7 +2271,7 @@ function import_acronym_processing($input_file,$output_file)
         {
             $go = 0;
         }
-        if($line_split[1])
+        if($line_split.count -ge 2)
         {
             $line_split[1] = $line_split[1].trim();
             if(($line_split[1] -eq "") -or ($line_split[1] -match "^- "))
@@ -2272,7 +2283,7 @@ function import_acronym_processing($input_file,$output_file)
         {
             $go = 0;
         }
-        if($line_split[2])
+        if($line_split.count -ge 3)
         {
             $go = 0; #More than two columns
             #write-host "REMOVED $line_counter = $line"
@@ -2505,7 +2516,6 @@ function manage_acronyms_dialog
     $edit_acronym_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $edit_acronym_form.Location = new-object System.Drawing.Point(0, 0)
     $edit_acronym_form.MaximizeBox = $false
-    $edit_acronym_form.Icon = $icon
     $edit_acronym_form.SizeGripStyle = "Hide"
     $edit_acronym_form.Width = 800
     if($item_number -eq 0)
@@ -2531,14 +2541,14 @@ function manage_acronyms_dialog
 
 
     $title_label                          = New-Object system.Windows.Forms.Label
-    $title_label.text                     = "Manage Acronyms && Abbreviation";
+    $title_label.text                     = "Manage Acronyms && Abbreviations";
     $title_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
     $title_label.BackColor                = $script:theme_settings['DIALOG_TITLE_BANNER_COLOR']
     $title_label.Anchor                   = 'top,right'
-    $title_label.width                    = ($edit_acronym_form.width)
+    $title_label.width                    = $edit_acronym_form.Width
     $title_label.height                   = 30
-    $title_label.TextAlign = "MiddleCenter"
-    $title_label.location                 = New-Object System.Drawing.Point(($rename_button.Location.x + $rename_button.width + $spacer),$y_pos)
+    $title_label.TextAlign                = "MiddleCenter"
+    $title_label.location                 = New-Object System.Drawing.Point((($edit_acronym_form.Width / 2) - ($title_label.Width / 2) + 35),$y_pos)
     $title_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
     $edit_acronym_form.controls.Add($title_label);
 
@@ -2640,7 +2650,7 @@ function manage_acronyms_dialog
             $edit_button.Text      = "Manual Edit"
             $edit_button.Name      = $list_file 
             $edit_button.Add_Click({
-                $message = "Making edits to Acronym and/or Abbreviations lists:`n - Must be kept in .csv file format`n - Must remain only two columns`n - Shorthand in column 1`n - Longhand in column 2`n - Is case sensative (lower case ideal in most cases)"
+                $message = "Making edits to Acronym and/or Abbreviations lists:`n - Must be kept in .csv file format`n - Must remain only two columns`n - Shorthand in column 1`n - Longhand in column 2`n - Is case sensitive (lower case ideal in most cases)"
                 [System.Windows.MessageBox]::Show($message,"!!!WARNING!!!",'Ok')
                 explorer.exe $this.name
             });
@@ -2812,7 +2822,6 @@ function rename_dialog($input_file)
     $rename_form.Location = new-object System.Drawing.Point(0, 0)
     $rename_form.Size = new-object System.Drawing.Size(400, 120)
     $rename_form.MaximizeBox = $false
-    $rename_form.Icon = $icon
     $rename_form.SizeGripStyle = "Hide"
     $rename_form.Text = "Rename `"$input_name`""
     #$rename_form.TopMost = $True
@@ -3158,7 +3167,7 @@ function prompt_for_file()
  [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms")|Out-Null
 
  $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
- $OpenFileDialog.initialDirectory = $initialDirectory
+ $OpenFileDialog.initialDirectory = "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
  #$OpenFileDialog.filter = "All files (*.*)| *.*"
  $OpenFileDialog.filter = "Excel Worksheets (*.xls, *.xlsx, *.csv)|*.xls;*.xlsx;*.csv"
  $OpenFileDialog.ShowDialog() | Out-Null
@@ -3264,6 +3273,7 @@ function right_click_menu
     $index_start = $editor.SelectionStart;
     For ($i=0; $i -le ($editor.text.Length - $editor.SelectionStart); $i++) 
     {
+        $temp = "";
         if(!(($editor.SelectionStart + $i) -ge $editor.text.Length))
         {
             $temp = $simplified_text.Substring(($editor.SelectionStart + $i),1);
@@ -3498,6 +3508,7 @@ function right_click_menu
     ############################################################################
     #Thesaurus
     $script:global_thesaurus = @{};
+    $script:global_word_hippo = @{};
     if($editor.SelectedText.length -eq 0)
     {
         if(($script:dictionary_index.containskey($word)) -and ($script:dictionary_index[$word] -eq "C") -or ($thesaurus_word -ne ""))
@@ -3524,7 +3535,24 @@ function right_click_menu
             $thesaurus_sub_menu.enabled = $false
 	        $thesaurus_menu.DropDownItems.Add($thesaurus_sub_menu)
 
+            ##############Word Hippo Lookup
 
+            $words = word_hippo_lookup $word
+            $separator = [System.Windows.Forms.ToolStripSeparator]::new()
+	        $contextMenuStrip1.Items.Add($separator)
+            $script:word_hippo_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
+            $word_hippo_menu.text = "Word Hippo"
+            $word_hippo_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+            $word_hippo_menu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+            $word_hippo_menu.name = "$index_start::$word"
+	        $contextMenuStrip1.Items.Add($word_hippo_menu)
+            $word_hippo_sub_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
+            $word_hippo_sub_menu.text = "Loading..."
+            $word_hippo_sub_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+            $word_hippo_sub_menu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+            $word_hippo_sub_menu.name = "Loading..."
+            $word_hippo_sub_menu.enabled = $false
+	        $word_hippo_menu.DropDownItems.Add($word_hippo_sub_menu)
 
         }
     }
@@ -3533,9 +3561,7 @@ function right_click_menu
 #######Thesaurus Lookup#########################################################
 function thesaurus_lookup($lookup_word)
 {
-    
-    [string]$status = $script:thesaurus_job.state
-    if(($status -eq "") -and ($lookup_word -ne ""))
+    if(($script:thesaurus_job -eq "") -and ($lookup_word -ne ""))
     {
         #write-host Looking up $lookup_word
         #########################################################
@@ -3633,14 +3659,13 @@ function thesaurus_lookup($lookup_word)
     {
         #########################################################
         ###Job Finished
-        if($status -eq "Completed")
+        if($script:thesaurus_job.state -eq "Completed")
         {
             $script:global_thesaurus = Receive-Job -Job $script:thesaurus_job
-            #write-host Count: $script:global_thesaurus.get_count()
-            if(($status -eq "Completed") -and ($script:global_thesaurus.Get_Count() -ne 0))
+            if(($script:thesaurus_job.state -eq "Completed") -and ($script:global_thesaurus.Get_Count() -ne 0))
             {   
                 ([int]$index_start,$word) = $thesaurus_menu.name -split "::"
-                #write-host $index_start - $word
+                #write-host Thesuarus $index_start - $word
                 $thesaurus_menu.DropDownItems.clear();
                 $max_words = 25
                 $counter = 0;
@@ -3697,6 +3722,126 @@ function thesaurus_lookup($lookup_word)
 
 }
 ################################################################################
+#######Word Hippo Lookup########################################################
+function word_hippo_lookup($lookup_word)
+{
+    if(($script:word_hippo_job -eq "") -and ($lookup_word -ne ""))
+    {
+        #########################################################
+        ###Start Job
+        $script:word_hippo_job = Start-Job -ScriptBlock {
+
+            $word = $using:lookup_word
+            $word_list = New-Object system.collections.hashtable
+            $word = $word.ToLower();
+            $full_url = "https://www.wordhippo.com/what-is/another-word-for/$word.html"
+
+            try
+            {
+                $response = Invoke-WebRequest -Uri $full_url
+                $response = $response -split "`n"
+                $found = 0;
+                foreach($line in $response)
+                {
+                    $pattern = '<a href="'
+                    if($line -match [regex]::Escape($pattern) -and $line.Length -lt 70)
+                    {
+                        $line_split = $line -split ('><a href="|.html">|</a></div>')
+
+                        if(($line_split[1] -ne "") -and ($line_split[2] -ne ""))
+                        {
+                            if($line_split[1] -eq $line_split[2])
+                            {
+                                if(!($word_list.contains($line_split[1])))
+                                {
+                                    $word_list.add($line_split[1],"");
+                                    $found++
+                                    if($found -gt 25)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                $word_list.add("Failed");
+            }
+            return $word_list
+        }
+    }
+    else
+    {
+        #########################################################
+        ###Job Finished
+        if($script:word_hippo_job.state -eq "Completed")
+        {
+
+
+            $script:global_word_hippo = Receive-Job -Job $script:word_hippo_job
+            if(($script:word_hippo_job.state -eq "Completed") -and ($script:global_word_hippo.Get_Count() -ne 0))
+            {   
+                
+                ([int]$index_start,$word) = $word_hippo_menu.name -split "::"
+                #write-host Word_hippo $index_start - $word
+                $word_hippo_menu.DropDownItems.clear();
+                $max_words = 25
+                $counter = 0;
+                foreach($synonym in $script:global_word_hippo.getEnumerator() | Sort Value -Descending) 
+                {
+                    #write-host $synonym.key - $synonym.value
+                    $counter++;
+
+                    $word_hippo_sub_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
+                    $word_hippo_sub_menu.text = $synonym.key
+                    $word_hippo_sub_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+                    $word_hippo_sub_menu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+                    $word_hippo_sub_menu.name = "$index_start" + "::" + ($index_start + $word.length)  + "::" + $synonym.key
+
+                    #write-host $word_hippo_sub_menu.name
+                    $word_hippo_sub_menu.add_Click({
+                        replace_text $this.name
+                    })
+	                $word_hippo_menu.DropDownItems.Add($word_hippo_sub_menu)
+
+                    if($counter -eq $max_words)
+                    {
+                        break;
+                    } 
+                }          
+                $script:word_hippo_job = "";
+
+            }
+            elseif(($status -eq "Completed") -and ($script:global_word_hippo.Get_Count() -eq 0))
+            {
+
+                $word_hippo_menu.DropDownItems.clear();
+                $word_hippo_sub_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
+                $word_hippo_sub_menu.text = "No Synonyms Found"
+                $word_hippo_sub_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+                $word_hippo_sub_menu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+                $word_hippo_sub_menu.name = "No Synonyms Found"
+                $word_hippo_sub_menu.enabled = $false
+                $word_hippo_menu.DropDownItems.Add($word_hippo_sub_menu)
+                ###Duplicate fixes glitch where menu pops on the top right hand corner of screen... dum...
+                $word_hippo_sub_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
+                $word_hippo_sub_menu.text = "No Synonyms Found"
+                $word_hippo_sub_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
+                $word_hippo_sub_menu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
+                $word_hippo_sub_menu.name = "No Synonyms Found"
+                $word_hippo_sub_menu.enabled = $false
+                $word_hippo_menu.DropDownItems.Add($word_hippo_sub_menu)
+                $word_hippo_menu.DropDownItems.remove($word_hippo_sub_menu)
+
+                $script:word_hippo_job = "";
+            }
+        }
+    }
+}
+################################################################################
 ######Add to Dictionary#########################################################
 function add_to_dictionary($word)
 {
@@ -3731,7 +3876,6 @@ function add_to_acronyms($acronym,$meaning)
     $add_acronym_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $add_acronym_form.Location = new-object System.Drawing.Point(0, 0)
     $add_acronym_form.MaximizeBox = $false
-    $add_acronym_form.Icon = $icon
     $add_acronym_form.SizeGripStyle = "Hide"
     $add_acronym_form.Size='285,340'
     $add_acronym_form.Text = "Add Acronym or Abbreviation"
@@ -4058,7 +4202,7 @@ function update_sizer_box
             [int]$real_size = $script:bullets_and_sizes[$script:bullets_and_lines[$counter]]
             $sizer_box.SelectionStart = $location
             $sizer_box.SelectionLength = $sizer_line.length   
-            if($real_size -le 2719)
+            if($real_size -le 2718)
             {
                 $sizer_box.SelectionColor = [System.Drawing.ColorTranslator]::FromHtml($script:theme_settings['TEXT_CALCULATOR_UNDER_COLOR'])
                 #$sizer_box.Font = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
@@ -4071,7 +4215,7 @@ function update_sizer_box
             
             if($script:settings['SIZER_BOX_INVERTED'] -eq 1)
             {
-                $real_size = 2719 - $real_size
+                $real_size = 2718 - $real_size
                 $sizer_box.SelectedText = "$real_size"
             }
             else
@@ -4177,7 +4321,7 @@ function calculate_text_size
         }
 
         #######################################################Text Compression
-        [int]$length = 2719 - $size
+        [int]$length = 2718 - $size
         if($script:space_hash.get_count() -ne 0)
         {
             #write-host $size = $length
@@ -4196,7 +4340,7 @@ function calculate_text_size
                     {
                         if($match.index -ne 1)
                         {
-                            if(($stop -ne 1) -and ($size -gt 2719))
+                            if(($stop -ne 1) -and ($size -gt 2718))
                             {
                                 #$current_space = $line.substring($match.index,1)
                                 #$current_size = $character_blocks["$current_space"]
@@ -4214,7 +4358,7 @@ function calculate_text_size
 
                                 #write-host $line
                             }
-                            if($size -le 2719)
+                            if($size -le 2718)
                             {
                                 #write-host Compression Success
                                 #write-host $line
@@ -4234,7 +4378,7 @@ function calculate_text_size
             }
         }
         #############################################################Shorthand 
-        [int]$size = 2719 - $size
+        [int]$size = 2718 - $size
         if(($size -gt 2718))
         {
             [string]$size = ""
@@ -4325,7 +4469,7 @@ function scan_text
                 
                     $matches = [regex]::Matches("$line"," ")
                     $stop = 0;
-                    if($matches.Success)
+                    if($matches)
                     {  
                         foreach($space_type in $space_hash.GetEnumerator() | sort value -Descending) #Loop 1
                         {
@@ -4338,7 +4482,7 @@ function scan_text
                             {
                                 if($match.index -ne 1)
                                 {
-                                    if(($stop -ne 1) -and ($size -gt 2719))
+                                    if(($stop -ne 1) -and ($size -gt 2718))
                                     {
                                         $current_space = $ghost_editor.text.substring(($position + $match.index),1)                #Applies to entire block of text
                                         $current_size = $character_blocks["$current_space"]   
@@ -4364,7 +4508,7 @@ function scan_text
                                             #write-host space match
                                         }
                                     }
-                                    if($size -le 2719)
+                                    if($size -le 2718)
                                     {
                                         #write-host Compression Success
                                         #write-host $line
@@ -4465,7 +4609,7 @@ function scan_text
                 $matches = [regex]::Matches($simplified_text2, $pattern)
             }
 
-            if($matches.Success)
+            if($matches)
             {  
                 foreach($match in $matches)
                 {
@@ -4539,7 +4683,7 @@ function scan_text
     $pattern = "\w+"
     $matches = [regex]::Matches("$simplified_text3", $pattern)
 
-    if($matches.Success)
+    if($matches)
     {  
         foreach($match in $matches)
         {
@@ -4683,7 +4827,7 @@ function scan_text
     $pattern = " | | "
     $matches = [regex]::Matches($ghost_editor.text, $pattern)
 
-    if($matches.Success)
+    if($matches)
     {  
         foreach($match in $matches)
         {
@@ -4743,6 +4887,53 @@ function clipboard_copy_3
     {
         Set-Clipboard -Value $text
     }
+}
+################################################################################
+Function flush_memory
+{
+    if($script:settings['MEMORY_FLUSHING'] -match "3|4")
+    {
+        $Script:Timer.Stop()
+        Log "Flushing Memory Start"
+        $temp = "SUBLOG     Flush mode " + $script:settings['MEMORY_FLUSHING']
+        Log "$temp"
+        Remove-Variable "temp"
+
+        #$memory =  [System.Math]::Round((((Get-Process -Id $PID).PrivateMemorySize))/1mb, 1)
+        #$memory = $script:memBefore = (Get-Process -id $PID | Sort-Object WorkingSet64 | Select-Object Name,@{Name='WorkingSet';Expression={($_.WorkingSet64/1KB)}})
+        #$memory = [System.Math]::Round(($script:memBefore.WorkingSet)/1mb, 2)
+
+        $user_vars = @();
+        $user_vars = Get-Variable | Select-Object -ExpandProperty Name
+        $user_vars = (Compare-Object -ReferenceObject $script:main_vars -DifferenceObject $user_vars)
+        $flush_count = 0;
+        foreach($item in $user_vars.GetEnumerator() | sort )
+        {
+        
+            [string]$string = $item.InputObject
+            if(!($string -match "^memory$|^PSItem$|^this$|^_$|^AboutMenu$|^AcronymMenu$|^BulletMenu$|^EditMenu$|^FileMenu$|^OptionsMenu$"))
+            {
+                if($item.InputObject -ne "")
+                {
+                    #write-host "     ", $item.InputObject
+                    $flush_count++
+                    Remove-Variable $string -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        Log "SUBLOG     $flush_count Removed"
+        Log "Flushing Memory End"
+        Log "BLANK"
+    }
+    if($script:settings['MEMORY_FLUSHING'] -match "2|4")
+    {
+        $Script:Timer.Stop()
+        Log "Garbage Collect Started"
+        [System.GC]::GetTotalMemory(‘forcefullcollection’) | out-null
+        Log "Garbage Collect Ended"
+        Log "BLANK"
+    }
+    $Script:Timer.Start()
 }
 ################################################################################
 ######Idle Timer################################################################
@@ -4811,6 +5002,7 @@ Function Idle_Timer
     {
         if($OptionsMenu.Forecolor -eq "Black") #Reduce GUI Changes
         {
+            
             $OptionsMenu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
         }
     }
@@ -4845,11 +5037,19 @@ Function Idle_Timer
     }
     #########################################################################################
     ##Check Thesaurus Jobs
-    if($script:thesaurus_job.state)
+    if(($script:thesaurus_job -ne "") -and ($script:thesaurus_job.state))
     {
         Log "Running: Thesaurus_job"
         thesaurus_lookup
         Log "Ended: Thesaurus_job"
+    }
+    #########################################################################################
+    ##Check Word Hippo Jobs
+    if(($script:word_hippo_job -ne "") -and ($script:word_hippo_job.state))
+    {
+        Log "Running: Word_hippo_job"
+        word_hippo_lookup
+        Log "Ended: Word_hippo_job"
     }
     #########################################################################################
     ##User Resizing Entire Form
@@ -4876,6 +5076,7 @@ Function Idle_Timer
         $sidekick_panel.height = ($script:Form.Height - 100)
         $script:zoom = "Changed"
         Log "Resizing Form (Height) End"
+        Log "BLANK"
 
     }
     if($script:Form_Width -ne $script:Form.Width)
@@ -4936,6 +5137,7 @@ Function Idle_Timer
         $script:zoom = "Changed"
         $script:Form_width = $script:Form.Width
         Log "Resizing Form (Width) End"
+        Log "BLANK"
     }
     
     #########################################################################################
@@ -4960,6 +5162,7 @@ Function Idle_Timer
             $sizer_art.Location = New-Object System.Drawing.Size($sizer_box.location.x,($sizer_box.Location.y + $sizer_box.height)) 
         }
         Log "Resizing Editor/Feeder End"
+        Log "BLANK"
     }
     #########################################################################################
     ###Zoom Changes
@@ -5022,18 +5225,19 @@ Function Idle_Timer
             $script:sidekickgui = "New"
             #sidekick_display
             Log "Zoom Change End"
+            Log "BLANK"
         }
     }
     
     #########################################################################################
     ###Update Bullet Feed/Text Size Detection
-    if(([string]$script:feeder_job.state) -or ($editor.selectionstart -ne $script:caret_position) -or ($editor.Text -cne "$Script:recent_editor_text"))
+    if((([string]$script:feeder_job -ne "") -and ([string]$script:feeder_job.state)) -or ($editor.selectionstart -ne $script:caret_position) -or ($editor.Text -cne "$Script:recent_editor_text"))
     {
         Log "Update Feeder Start"
         #write-host Feeder Update $script:caret_position = $editor.SelectionStart = $script:feeder_job.state
         
         ##Update Line Location
-        if(($script:location_value.text) -and ($script:caret_position -ne $editor.SelectionStart) -or ($editor.Text -cne "$Script:recent_editor_text"))
+        if((($script:location_value -ne "") -and ($script:caret_position -ne $editor.SelectionStart)) -or ($editor.Text -cne "$Script:recent_editor_text"))
         {
             #write-host Finding
             $lines = $editor.text -split "`n";
@@ -5089,42 +5293,41 @@ Function Idle_Timer
             update_sizer_box
         }   
         $script:caret_position = $editor.SelectionStart
-        if([string]$script:feeder_job.state)
+        if($script:feeder_job -ne "")
         {
             #check status of job
             update_feeder
         }
         Log "Update Feeder End"
+        Log "BLANK"
     }
 
     #########################################################################################
     ###Update Sidekick
-    if([string]$script:sidekick_job.state)
+    if($script:sidekick_job -ne "")
     {
         Log "Update Sidekick Start"
         #write-host Update sidekick
         update_sidekick
         Log "Update Sidekick End"
+        Log "BLANK"
     }
 
 
+
     #########################################################################################
-    ###Save History
-    $duration = (Get-Date) - $script:save_history_timer
-    if(($duration.TotalSeconds -gt 10) -or ([string]$script:save_history_job.state -eq "Completed"))
+    ###Save History & Run Memory Cleanup
+    #$duration = (Get-Date) - $script:save_history_timer
+    #if(($duration.TotalSeconds -gt 10) -or (($script:save_history_job -ne "") -and ([string]$script:save_history_job.state -eq "Completed")))
+    if((((Get-Date) - $script:save_history_timer).TotalSeconds -gt 10) -or (($script:save_history_job -ne "") -and ([string]$script:save_history_job.state -eq "Completed")))
     {
         Log "Save History Start"
-        #write-host Saving
-        $status = [string]$script:save_history_job.state
-        #write-host ---$status      
         $script:save_history_timer = Get-Date
         save_history
-
-        #write-host Removed Garbage
-        #[System.GC]::GetTotalMemory(‘forcefullcollection’) | out-null
-        [System.GC]::Collect()
         Log "Save History End"
+        Log "BLANK"
 
+        flush_memory
         var_sizes
     }
 
@@ -5168,10 +5371,10 @@ Function Idle_Timer
             $editor.CustomVScroll()
 
             $Script:LockInterface = 0;
-            Log "Scan Text End" 
+            Log "Scan Text End"
+            Log "BLANK"
         }
-        $Script:CountDown = 1
-        
+        $Script:CountDown = 1 
     }
  }
 ################################################################################
@@ -5229,7 +5432,6 @@ function initial_checks
         $error_form.BackColor             = "Black"
         $error_form.Location = new-object System.Drawing.Point(0, 0)
         $error_form.MaximizeBox = $false
-        $error_form.Icon = $icon
         $error_form.SizeGripStyle = "Hide"
         $error_form.Width = 750
 
@@ -5309,7 +5511,6 @@ function initial_checks
         $error_form.BackColor             = "Black"
         $error_form.Location = new-object System.Drawing.Point(0, 0)
         $error_form.MaximizeBox = $false
-        $error_form.Icon = $icon
         $error_form.SizeGripStyle = "Hide"
         $error_form.Width = 750
 
@@ -5524,14 +5725,17 @@ function initial_checks
     {
         $settings_writer = new-object system.IO.StreamWriter("$dir\Resources\Required\Settings.csv",$true)
         $settings_writer.write("PROPERTY,VALUE`r`n");
-        $settings_writer.write("THEME,Blue Falcon`r`n");
+        $settings_writer.write("THEME,Dark Castle`r`n");
         $settings_writer.write("PACKAGE,Current`r`n");
         $settings_writer.write("LOAD_PACKAGES_AS_BULLETS,1`r`n");
         $settings_writer.write("TEXT_COMPRESSION,4`r`n");
         $settings_writer.write("CLOCK_SPEED,500`r`n");
+        $settings_writer.write("SAVE_HISTORY_THRESHOLD,200`r`n");
         $settings_writer.write("SIZER_BOX_INVERTED,1`r`n");
+        $settings_writer.write("MEMORY_FLUSHING,3`r`n");
         $settings_writer.close();
     }
+
     ##################################################################################
     #Build Default Themes
     if(!(Test-Path -LiteralPath "$dir\Resources\Themes\Blue Falcon.csv"))
@@ -5573,6 +5777,47 @@ function initial_checks
         $theme_writer.write("TEXT_CALCULATOR_BACKGROUND_COLOR,Black`r`n")
         $theme_writer.write("TEXT_CALCULATOR_OVER_COLOR,Red`r`n")
         $theme_writer.write("TEXT_CALCULATOR_UNDER_COLOR,White`r`n")
+        $theme_writer.close();
+    }
+    if(!(Test-Path -LiteralPath "$dir\Resources\Themes\Dark Castle.csv"))
+    {
+        $theme_writer = new-object system.IO.StreamWriter("$dir\Resources\Themes\Dark Castle.csv",$true)
+        $theme_writer.write("PROPERTY,VALUE`r`n")
+        $theme_writer.write("ADJUSTMENT_BAR_COLOR,#585858`r`n")
+        $theme_writer.write("DIALOG_BACKGROUND_COLOR,#434343`r`n")
+        $theme_writer.write("DIALOG_BUTTON_BACKGROUND_COLOR,#c0c0c0`r`n")
+        $theme_writer.write("DIALOG_BUTTON_TEXT_COLOR,Black`r`n")
+        $theme_writer.write("DIALOG_DROPDOWN_BACKGROUND_COLOR,blue`r`n")
+        $theme_writer.write("DIALOG_DROPDOWN_TEXT_COLOR,white`r`n")
+        $theme_writer.write("DIALOG_FONT,Lucida Sans Unicode`r`n")
+        $theme_writer.write("DIALOG_FONT_COLOR,#c4c4c4`r`n")
+        $theme_writer.write("DIALOG_FONT_SIZE,14.5`r`n")
+        $theme_writer.write("DIALOG_INPUT_BACKGROUND_COLOR,White`r`n")
+        $theme_writer.write("DIALOG_INPUT_TEXT_COLOR,Black`r`n")
+        $theme_writer.write("DIALOG_SUB_HEADER_COLOR,White`r`n")
+        $theme_writer.write("DIALOG_TITLE_BANNER_COLOR,#434343`r`n")
+        $theme_writer.write("DIALOG_TITLE_FONT_COLOR,#c4c4c4`r`n")
+        $theme_writer.write("EDITOR_BACKGROUND_COLOR,White`r`n")
+        $theme_writer.write("EDITOR_EXTEND_ACRONYM_FONT_COLOR,Blue`r`n")
+        $theme_writer.write("EDITOR_FONT,Times New Roman`r`n")
+        $theme_writer.write("EDITOR_FONT_COLOR,Black`r`n")
+        $theme_writer.write("EDITOR_FONT_SIZE,13`r`n")
+        $theme_writer.write("EDITOR_HIGHLIGHT_COLOR,Yellow`r`n")
+        $theme_writer.write("EDITOR_MISSPELLED_FONT_COLOR,Red`r`n")
+        $theme_writer.write("EDITOR_SHORTEN_ACRONYM_FONT_COLOR,Lime`r`n")
+        $theme_writer.write("FEEDER_BACKGROUND_COLOR,White`r`n")
+        $theme_writer.write("FEEDER_FONT,Times New Roman`r`n")
+        $theme_writer.write("FEEDER_FONT_COLOR,Black`r`n")
+        $theme_writer.write("FEEDER_FONT_SIZE,13`r`n")
+        $theme_writer.write("INTERFACE_FONT,Copperplate Gothic Bold`r`n")
+        $theme_writer.write("INTERFACE_FONT_SIZE,8`r`n")
+        $theme_writer.write("MAIN_BACKGROUND_COLOR,#676767`r`n")
+        $theme_writer.write("MENU_BACKGROUND_COLOR,Black`r`n")
+        $theme_writer.write("MENU_TEXT_COLOR,#c4c4c4`r`n")
+        $theme_writer.write("SIDEKICK_BACKGROUND_COLOR,#282828`r`n")
+        $theme_writer.write("TEXT_CALCULATOR_BACKGROUND_COLOR,#434343`r`n")
+        $theme_writer.write("TEXT_CALCULATOR_OVER_COLOR,Red`r`n")
+        $theme_writer.write("TEXT_CALCULATOR_UNDER_COLOR,#c4c4c4`r`n")
         $theme_writer.close();
     }
     if(!(Test-Path -LiteralPath "$dir\Resources\Themes\Alien.csv"))
@@ -5750,6 +5995,7 @@ function load_package
     [int]$script:history_system_location = 0
     [int]$script:history_user_location = 0
     [int]$script:save_history_tracker = 0
+    $script:sidekick_results = "";
     $package = $script:settings['PACKAGE']
     if(Test-Path -literalpath "$dir\Resources\Packages\$package")
     {
@@ -5758,18 +6004,25 @@ function load_package
         if(Test-Path -LiteralPath "$dir\Resources\Packages\$package\History.txt")
         {
             $reader = New-Object IO.StreamReader "$dir\Resources\Packages\$package\History.txt"
-            while($null -ne ($line = $reader.ReadLine()))
+            [int]$place = 0;
+            $mode = ""
+            [int]$start = 0;
+            [int]$end = 0;
+            $entry = "" 
+
+            $history_file = Get-content -tail $script:settings['SAVE_HISTORY_THRESHOLD'] "$dir\Resources\Packages\$package\History.txt"; #Updated history method (Ver 1.3 Update)
+            foreach($line in $history_file)
             {
                 ([int]$place,$mode,[int]$start,[int]$end,$entry) = $line -split '::'
                 $entry = $entry -replace "<RETURN>","`n"
                 if((!($history.contains($place))) -and ($place -match "\d"))
                 {
                     $script:history.add($place,"$mode::$start::$end::$entry")
-                    [int]$script:history_system_location = $place
-                    [int]$script:history_user_location = $place
-                    [int]$script:save_history_tracker = $place
                 }
             }
+            [int]$script:history_system_location = $place
+            [int]$script:history_user_location = $place
+            [int]$script:save_history_tracker = $place
             $reader.close();
         }
         ###########Load Snapshot
@@ -5865,6 +6118,8 @@ function load_settings
 {
     if(Test-Path "$dir\Resources\Required\Settings.csv")
     {
+        ################################################################################
+        ######Load All Settings#########################################################
         $line_count = 0;
         $reader = [System.IO.File]::OpenText("$dir\Resources\Required\Settings.csv")
         while($null -ne ($line = $reader.ReadLine()))
@@ -5881,7 +6136,23 @@ function load_settings
                 #write-host $value
             } 
         }
-        $reader.close(); 
+        $reader.close();
+
+        ################################################################################
+        ######Verify All Settings Loaded################################################
+        $changes = 0;
+        if($script:settings['SAVE_HISTORY_THRESHOLD'] -eq $null)  {$changes = 1; $script:settings['SAVE_HISTORY_THRESHOLD'] = 200}
+        if($script:settings['MEMORY_FLUSHING'] -eq $null)         {$changes = 1; $script:settings['MEMORY_FLUSHING'] = 3}
+        if($script:settings['THEME'] -eq $null)                   {$changes = 1; $script:settings['THEME'] = "Dark Castle"}
+        if($script:settings['PACKAGE'] -eq $null)                 {$changes = 1; $script:settings['PACKAGE'] = "Current"}
+        if($script:settings['LOAD_PACKAGES_AS_BULLETS'] -eq $null){$changes = 1; $script:settings['LOAD_PACKAGES_AS_BULLETS'] = 1}
+        if($script:settings['TEXT_COMPRESSION'] -eq $null)        {$changes = 1; $script:settings['TEXT_COMPRESSION'] = 4}
+        if($script:settings['CLOCK_SPEED'] -eq $null)             {$changes = 1; $script:settings['CLOCK_SPEED'] = 500}
+        if($script:settings['SIZER_BOX_INVERTED'] -eq $null)      {$changes = 1; $script:settings['SIZER_BOX_INVERTED'] = 1}
+        if($changes -eq 1)
+        {
+            update_settings
+        }
     }
     $Script:Timer.Interval = $script:settings['CLOCK_SPEED'];
     #write-host ClocK Speed: $script:settings['CLOCK_SPEED']
@@ -5889,7 +6160,7 @@ function load_settings
     $Script:Timer.Add_Tick({Idle_Timer})
 }
 ################################################################################
-######CSV Line to Array#######################################################
+######CSV Line to Array#########################################################
 function csv_line_to_array ($line)
 {
     if($line -match "^,")
@@ -6370,7 +6641,31 @@ function undo_history
     {
         if($script:history.contains($script:history_user_location))
         {
+            ###Try to get from memory
             ($mode,$start,$end,$change) = $script:history[$script:history_user_location] -split "::"
+            #write-host "Got it from Memory"
+        }
+        else
+        {
+            if($script:history_user_location -le 1)
+            {
+                #$script:history_user_location = 2;
+            }
+            ###Try to get from file
+            $package = $script:settings['PACKAGE']
+            $data = Get-Content -literalpath "$dir\Resources\Packages\$package\History.txt" | Select -Index ($script:history_user_location - 1)
+            ($place,$mode,$start,$end,$change) = $data -split "::"
+            $change = $change -replace "<RETURN>","`n"
+            if($place -ne $script:history_user_location)
+            {
+                write-host "ERROR: History File Misaligned $place = $script:history_user_location"
+            }
+            
+            #write-host "Got it from File $data"
+        }
+        if($mode -ne "")
+        {
+            
             if($mode -eq "A")
             {
                 #write-host Deleting $change
@@ -6386,26 +6681,50 @@ function undo_history
                 $editor.SelectionLength = 0
                 $editor.SelectedText = "$change"  
             }
+            $script:history_user_location--
         }
-        $script:history_user_location--
+        else
+        {
+            write-host ERROR: Failed History at $script:history_user_location
+        }
     }
     else
     {
-        #write-host Undo Nope
+        #write-host "Undo Nope"
     }
 }
 ################################################################################
 ######Redo History##############################################################
 function redo_history
 {
-    #write-host REDO $script:history[$script:history_user_location]  
     if(($script:history_user_location -lt $script:history_system_location) -and ($script:history_user_location -ge 0) -and ($script:history_user_location -lt $script:text_lock))
     {
-
-        $script:history_user_location++
         if($script:history.contains($script:history_user_location))
         {
+            ###Try to get from memory
             ($mode,$start,$end,$change) = $script:history[$script:history_user_location] -split "::"
+            #write-host "Got it from Memory"
+        }
+        else
+        {
+            ###Try to get from file
+            #if($script:history_user_location -le $script:history_system_location)
+            #{
+                $package = $script:settings['PACKAGE']
+                if($script:history_user_location -le 1) {$script:history_user_location = 1}
+                $data = Get-Content -literalpath "$dir\Resources\Packages\$package\History.txt" | Select -Index ($script:history_user_location - 1)
+                ($place,$mode,$start,$end,$change) = $data -split "::"
+                $change = $change -replace "<RETURN>","`n"
+                if($place -ne $script:history_user_location)
+                {
+                    write-host "History File Misaligned $place = $script:history_user_location"
+                }
+                #write-host "Got it from File $data"
+            #}
+        }
+        if($mode -ne "")
+        {
+            $script:history_user_location++
             if($mode -eq "D")
             {
                 #write-host Deleting $change
@@ -6421,7 +6740,11 @@ function redo_history
                 $editor.SelectionLength = 0
                 $editor.SelectedText = $change
             }
-        }       
+        }
+        else
+        {
+            write-host ERROR: Failed History at $script:history_user_location
+        }      
     }
     else
     {
@@ -6433,8 +6756,7 @@ function redo_history
 function save_history
 {
     #write-host Saving History
-    [string]$status = $script:save_history_job.state
-    if(($status -eq "") -and ($script:save_history_tracker -lt $script:history_system_location) -and ($script:lock_history -ne 1))
+    if(($script:save_history_job -eq "") -and ($script:save_history_tracker -lt $script:history_system_location) -and ($script:lock_history -ne 1))
     {
         #write-host Running save Job
         #write-host Last Saved = $script:save_history_tracker
@@ -6449,7 +6771,7 @@ function save_history
             $editor_text = $using:editor.text
 
             Set-Content -literalpath "$dir\Resources\Packages\$package\Snapshot.txt" $editor_text -encoding Unicode
-            #$writer = New-Object IO.StreamWriter "$dir\Resources\Packages\$package\History.txt", $true
+
             $writer = [IO.StreamWriter]::new("$dir\Resources\Packages\$package\History.txt", $true, [Text.Encoding]::UTF8)
             foreach($item in $history.GetEnumerator() | sort key)
             {
@@ -6468,11 +6790,42 @@ function save_history
     }
     else
     {
-        if($status -eq "Completed")
+        if(($script:save_history_job -ne "") -and ($script:save_history_job.state -eq "Completed"))
         {
             #write-host "Job Finished"
             $script:save_history_tracker = Receive-Job -Job $script:save_history_job
             $script:save_history_job = "";
+            #######################################################Scrub History in Memory (Ver 1.3 Update)
+            
+            $package = $script:settings['PACKAGE'];
+            if(Test-path -LiteralPath "$dir\Resources\Packages\$package\History.txt")
+            {
+                $last_line = 0;
+                (Get-Content "$dir\Resources\Packages\$package\History.txt" -read 100 | % { $last_line += $_.Length })
+                $remove_counter = ($last_line  - $script:settings['SAVE_HISTORY_THRESHOLD'])
+                #write-host Last Line: $last_line
+                #write-host System Location: $script:history_system_location
+                #write-host History Tracker: $script:save_history_tracker
+                #write-host History Count: $script:history.count
+                #write-host Remove Count:$remove_counter
+                while($remove_counter -gt 0)
+                {
+                   
+                       if($script:history.Contains($remove_counter))
+                       {
+                            #write-host $remove_counter
+                            $script:history.remove($remove_counter)
+                       }
+                       if($script:history.count -le $script:settings['SAVE_HISTORY_THRESHOLD'])
+                       {
+                            #write-host Stopped $remove_counter
+                            break;
+                       }
+                       $remove_counter--;
+                }
+                #write-host $script:history.count
+            }
+            #######################################################
             
         }
     }
@@ -6498,7 +6851,6 @@ function save_package_dialog
     $save_pacakge_form.Location = new-object System.Drawing.Point(0, 0)
     $save_pacakge_form.Size = new-object System.Drawing.Size(440, 120)
     $save_pacakge_form.MaximizeBox = $false
-    $save_pacakge_form.Icon = $icon
     $save_pacakge_form.SizeGripStyle = "Hide"
     $save_pacakge_form.Text = "Save Package"
     #$save_pacakge_form.TopMost = $True
@@ -6676,8 +7028,11 @@ function save_package_dialog
 function manage_package_dialog
 {
     save_history
-    $packages = Get-ChildItem -Path "$dir\Resources\Packages" -Directory -Force -ErrorAction SilentlyContinue #| Select-Object FullName
-    #write-host $packages.count  
+    write-host $dir\Resources\Packages
+
+    $packages = Get-ChildItem -LiteralPath "$dir\Resources\Packages" -Directory -Force -ErrorAction SilentlyContinue #| Select-Object FullName
+
+    #write-host ($packages | Measure-Object).Count
      
     $spacer = 0;
     $manage_package_form = New-Object System.Windows.Forms.Form
@@ -6685,14 +7040,13 @@ function manage_package_dialog
     $manage_package_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $manage_package_form.Location = new-object System.Drawing.Point(0, 0)
     $manage_package_form.MaximizeBox = $false
-    $manage_package_form.Icon = $icon
     $manage_package_form.SizeGripStyle = "Hide"
     $manage_package_form.Width = 800
-    if($packages.count -eq 0)
+    if(($packages | Measure-Object).Count -eq 0)
     {
         $manage_package_form.Height = 200;
     }
-    elseif((($packages.count * 65) + 140) -ge 600)
+    elseif(((($packages | Measure-Object).Count * 65) + 140) -ge 600)
     {
         $manage_package_form.Height = 600;
         $manage_package_form.Autoscroll = $true
@@ -6700,7 +7054,7 @@ function manage_package_dialog
     }
     else
     {
-        $manage_package_form.Height = (($packages.count * 65) + 140)
+        $manage_package_form.Height = ((($packages | Measure-Object).Count * 65) + 140)
     }
     $manage_package_form.Text = "Manage Packages"
     $manage_package_form.TabIndex = 0
@@ -6717,7 +7071,7 @@ function manage_package_dialog
     $title_label.width                    = ($manage_package_form.width)
     $title_label.height                   = 30
     $title_label.TextAlign = "MiddleCenter"
-    $title_label.location                 = New-Object System.Drawing.Point(($rename_button.Location.x + $rename_button.width + $spacer),$y_pos)
+    $title_label.location                 = New-Object System.Drawing.Point((($manage_package_form.width / 2) - ($title_label.width / 2)),$y_pos)
     $title_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
     $manage_package_form.controls.Add($title_label);
 
@@ -6738,7 +7092,7 @@ function manage_package_dialog
 
     $y_pos = $y_pos + 5;
 
-    if($packages.count -ne 0)
+    if(($packages | Measure-Object).Count -ne 0)
     {
         #####################################################################################
         foreach($package in $packages | sort name)
@@ -7077,7 +7431,6 @@ function interface_dialog
     $color_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $color_form.Location = new-object System.Drawing.Point(0, 0)
     $color_form.MaximizeBox = $false
-    $color_form.Icon = $icon
     $color_form.SizeGripStyle = "Hide"
     $color_form.Width = 850
     $color_form.Height = 900
@@ -7166,9 +7519,6 @@ function interface_dialog
     $color_form.controls.Add($manage_theme_button)
 
     $y_pos = $y_pos + 35
-    
-    
-    
     
     $separator_bar1.text                        = ""
     $separator_bar1.AutoSize                    = $false
@@ -7314,6 +7664,7 @@ function interface_dialog
         $this.text = $this.text -replace '\W',''
         $valid = 0;
         [string]$colors = (" " + ([System.Drawing.Color] | gm -Static -MemberType Properties).name + " ")
+
         if($colors -match (" " + $this.text + " "))
         {
             $valid = 1;
@@ -7332,7 +7683,7 @@ function interface_dialog
         }
         else
         {
-               $script:theme_settings['MENU_TEXT_COLOR'] = $this.text
+               #$script:theme_settings['MENU_TEXT_COLOR'] = $this.text
                $MenuBar.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
                $FileMenu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
                $EditMenu.Forecolor = $script:theme_settings['MENU_TEXT_COLOR']
@@ -7357,7 +7708,7 @@ function interface_dialog
     $menu_text_color_button.Add_Click({
         $script:color_picker = $script:theme_settings['MENU_TEXT_COLOR']
         ($trash,$color) = color_picker
-        if($color -match "\d")
+        if($color -like '[a-f0-9]*')
         {
             $script:theme_settings['MENU_TEXT_COLOR'] = "#$color"
             $MenuBar.Forecolor = "#$color"
@@ -7435,7 +7786,7 @@ function interface_dialog
         }
         else
         {
-            $script:theme_settings['MENU_BACKGROUND_COLOR'] = $script:theme_settings['MENU_BACKGROUND_COLOR']
+            #$script:theme_settings['MENU_BACKGROUND_COLOR'] = $script:theme_settings['MENU_BACKGROUND_COLOR']
             $MenuBar.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
             $FileMenu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
             $EditMenu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
@@ -8483,7 +8834,7 @@ function interface_dialog
     $color_form.controls.Add($text_caclulator_background_color_label);
 
                          
-    $text_caclulator_background_color_input.AutoSize                 = $flase
+    $text_caclulator_background_color_input.AutoSize                 = $false
     $text_caclulator_background_color_input.ForeColor                = $script:theme_settings['DIALOG_INPUT_TEXT_COLOR']
     $text_caclulator_background_color_input.BackColor                = $script:theme_settings['DIALOG_INPUT_BACKGROUND_COLOR']
     $text_caclulator_background_color_input.Anchor                   = 'top,left'
@@ -9529,6 +9880,7 @@ function interface_dialog
             $menu_text_color_label.ForeColor                      = $script:theme_settings['DIALOG_FONT_COLOR']
             $menu_background_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
             $adjustment_bars_color_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $interface_font_label.ForeColor                       = $script:theme_settings['DIALOG_FONT_COLOR']
             $editor_background_color_label.ForeColor              = $script:theme_settings['DIALOG_FONT_COLOR']
             $editor_font_color_label.ForeColor                    = $script:theme_settings['DIALOG_FONT_COLOR']
             $editor_misspelled_font_color_label.ForeColor         = $script:theme_settings['DIALOG_FONT_COLOR']
@@ -10526,7 +10878,7 @@ function load_theme($theme)
     #############################################################################
     if($loader -eq 1)
     {
-        $script:Form.BackColor                                       = $script:theme_settings['MAIN_BACKGROUND_COLOR']
+        $script:Form.BackColor                                = $script:theme_settings['MAIN_BACKGROUND_COLOR']
 
         $MenuBar.ForeColor                                    = $script:theme_settings['MENU_TEXT_COLOR']
         $MenuBar.BackColor                                    = $script:theme_settings['MENU_BACKGROUND_COLOR']      
@@ -10885,7 +11237,6 @@ function save_theme_dialog
     $save_theme_form.Location = new-object System.Drawing.Point(0, 0)
     $save_theme_form.Size = new-object System.Drawing.Size(440, 120)
     $save_theme_form.MaximizeBox = $false
-    $save_theme_form.Icon = $icon
     $save_theme_form.SizeGripStyle = "Hide"
     $save_theme_form.Text = "Save Theme"
     #$save_theme_form.TopMost = $True
@@ -11076,7 +11427,6 @@ function manage_themes
     $manage_themes_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $manage_themes_form.StartPosition = "CenterScreen"
     $manage_themes_form.MaximizeBox = $false
-    $manage_themes_form.Icon = $icon
     $manage_themes_form.SizeGripStyle = "Hide"
     $manage_themes_form.Width = 600
     if($themes.get_count() -eq 0)
@@ -11285,14 +11635,13 @@ function update_sidekick
 {
     if($sidekick_panel.width -ne 5)
     {
-        [string]$status = $script:sidekick_job.state
-        if($status -eq "")
+        if($script:sidekick_job -eq "")
         {
-            #write-host Running sidekick
             $script:sidekick_job = Start-Job -ScriptBlock {
-                #clear-host
+                
                 $acros_found = $using:acro_index
                 $editor_text = $using:editor
+
                 [string]$editor_text = $editor_text.text
             
                 $unique_acros = @{};
@@ -11301,7 +11650,6 @@ function update_sidekick
                 $metrics = @{};
                 $script:Formating_errors = @{};
                 $acro_list = @{};
-            
 
                 ##################################################################################
                 ##Check Acronyms
@@ -11328,8 +11676,8 @@ function update_sidekick
 
                         }
                     }
-                    ###########################################################################
 
+                    ###########################################################################
                     if(!($acro_counter.Contains("$mode::$acronym::$meaning")))
                     {
                         $acro_counter.Add("$mode::$acronym::$meaning",1);
@@ -11362,7 +11710,6 @@ function update_sidekick
                         $acro_counter["$mode::$acronym::$meaning"]++;
                         #write-host $acronym $acro_counter[$acronym]
                     }
-                
                 }
                 ###################Make Unique List
                 $counter = 0      
@@ -11377,7 +11724,6 @@ function update_sidekick
                         {
                             $unique_acros.add($acronym,$acro.value)
                         }
-
                     }
                 }
                 ##################################################################################
@@ -11387,7 +11733,6 @@ function update_sidekick
             
                 if($matches.Success)
                 {  
-        
                     foreach($match in $matches)
                     {
                         #write-host ------------------------------------------------------------- $match.index = $match.value
@@ -11477,8 +11822,9 @@ function update_sidekick
                         }
                     }
                 }
-                ##################################################################################
-                ##Text Disection
+   
+                #########################################################################################################
+                #Text Disection
                 $line_split = $editor_text -split '\n'
                 $line_count = 0;
                 $bullet_count = 0;
@@ -11513,6 +11859,8 @@ function update_sidekick
                                 $duplicate = 1;
                                 $script:Formating_errors.Add("Line $line_count (Duplicate Bullet)",$line_count);
                             }
+
+
                             if($duplicate -ne 1)
                             {
                                 ########Split Bullet A.I.R.
@@ -11534,8 +11882,6 @@ function update_sidekick
                                         ###Get First word in section
                                         $firstword1 = ((($section -replace '-','').trim() -split ' ')[0])
                                         $lastword1 = ((($section -replace '-|!','').trim() -split ' ')[-1])
-                                    
-
 
                                         ###############################################################
                                         ##Cross refrence against all other sections
@@ -11575,7 +11921,6 @@ function update_sidekick
                                                 }
                                             }
                                         }
-
                                         ###Add to Section List
                                         if($ending1 -eq 0)
                                         {
@@ -11609,7 +11954,6 @@ function update_sidekick
                                     $message = "Line $line_count (Missing Space After `"-`")"
                                     if(!($script:Formating_errors.contains($message))){$script:Formating_errors.Add($message,$line_count);}
                                 }
-                                $script:Formating_errors
                                 ###Missing ;
                                 if(!($line -match ";"))
                                 {
@@ -11632,7 +11976,6 @@ function update_sidekick
                                     $message = "Line $line_count (Multiple `";`")"
                                     if(!($script:Formating_errors.contains($message))){$script:Formating_errors.Add($message,$line_count);}
                                 }
-
                                 ###Missing --
                                 if(!($line -match "--"))
                                 {
@@ -11672,7 +12015,7 @@ function update_sidekick
                         {
                             #write-host HEADER
                             $header_count++;
-                        }
+                        }  
                     }
                 }
                 #########################################################################################################
@@ -11697,19 +12040,18 @@ function update_sidekick
                         }
                     }
                 }
-            
-                ###################################################################################
+      
 
-
-                @{"acro_list" = $($acro_list); "consistency_errors" = $($consistency_errors);"unique_acros" = $($unique_acros);"word_counter" = $($word_counter);"acro_counter" = $($acro_counter); "header_count" = $($header_count); "bullet_count" = $($bullet_count); "word_count" = $($word_count);"formating_errors" = $($script:Formating_errors);"metrics" = $($metrics)}
+                $result = @{"acro_list" = $($acro_list); "consistency_errors" = $($consistency_errors);"unique_acros" = $($unique_acros);"word_counter" = $($word_counter);"acro_counter" = $($acro_counter); "header_count" = $($header_count); "bullet_count" = $($bullet_count); "word_count" = $($word_count);"formating_errors" = $($script:Formating_errors);"metrics" = $($metrics);}
+                return ($result)
             }
         }
         else
         {   
-            if($status -eq "Completed")
+            if($script:sidekick_job.state -eq "Completed")
             {   
-
                 ($script:sidekick_results) = Receive-Job -Job $script:sidekick_job
+
                 if($script:sidekickgui -match "Built|Update Values")
                 {
                     $script:sidekickgui = "Update Values"
@@ -11718,6 +12060,11 @@ function update_sidekick
                 $script:sidekick_job = "";
             }
         }
+
+
+
+
+
     }#Sidekick width
 }
 #$script:formating_errors = @{};
@@ -11725,16 +12072,19 @@ function update_sidekick
 ######Sidekick Display##########################################################
 function sidekick_display
 {
-    #write-host GUI = $script:sidekickgui
-    ##First Run
     if($sidekick_panel.width -ne 5)
     {
         if(($script:sidekick_results -ne "") -and ($script:sidekickgui -eq "New"))
         {
             $script:sidekickgui = "Built"
             $left_panel.Controls.Clear();
-            if($printer_is_off -eq "1")
-                                                                                                                                                                                                                                                            {
+
+
+            ################################################################################
+            ######Sidekick Debug############################################################
+            $dubug_printer = 0;
+            if($dubug_printer -eq "1")
+            {
 
                 write-host
                 write-host Word Count:
@@ -11786,9 +12136,10 @@ function sidekick_display
                 {
                     write-host  - $metric.key $metric.value
                 }
-            
-                   
-        }
+            }
+
+            ################################################################################
+            ######Sidekick Build Fresh Window###############################################
             $y_pos = 5
 
             $script:basic_info_label                   = New-Object system.Windows.Forms.Label
@@ -11990,7 +12341,7 @@ function sidekick_display
             $left_panel.controls.Add($word_count_name_label);
 
             $script:word_count_name_value                          = New-Object system.Windows.Forms.Label
-            $word_count_name_value.text                     = $script:sidekick_results.word_count
+            $word_count_name_value.text                     = $script:sidekick_results.word_count[0]
             $word_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
             $word_count_name_value.Anchor                   = 'top,right'
             $word_count_name_value.autosize = $true
@@ -12153,7 +12504,7 @@ function sidekick_display
                         #write-host $scope_start = $scope_end - $found
                     }
                         
-                    if($matches.Success)
+                    if($matches)
                     {
                         foreach($match in $matches)
                         {
@@ -12232,7 +12583,7 @@ function sidekick_display
                     $word1l = $word1.substring(0,$word1.Length).toupper() 
                     $word2l = $word2.substring(0,$word2.Length).toupper()
 
-                    write-host $word1 $word2
+                    #write-host $word1 $word2
 
 
                     $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word1c))|$([regex]::escape($word2c))|$([regex]::escape($word1l))|$([regex]::escape($word2l))"
@@ -12246,7 +12597,7 @@ function sidekick_display
                     {  
                         foreach($match in $matches)
                         {
-                            write-host $match.value
+                            #write-host $match.value
                             if(((($match.index - 1) -ge 0 ) -and (!($editor.text.Substring(($match.index - 1),1) -match "\w"))) -or (($match.index -1) -lt 0))
                             {
                                 if(((($match.index + $match.value.length + 1) -le $editor.text.length) -and (!($editor.text.Substring(($match.index + $match.value.length),1) -match "\w"))) -or (($match.index + $match.value.length) -eq $editor.text.length) -or ($editor.text.Substring(($match.index + $match.value.length - 1),1) -match '/'))
@@ -12687,8 +13038,9 @@ function sidekick_display
 
 
         } 
-        ##################################################################################
-        ##################################################################################
+
+        ################################################################################
+        ######Sidekick Refresh Information##############################################
         if(($script:sidekick_results -ne "") -and ($script:sidekickgui -eq "Update Values"))
         {
             ##Update Values instead of rebuilding
@@ -12801,7 +13153,6 @@ function acronym_list_dialog($type)
     $acronym_list_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $acronym_list_form.Location = new-object System.Drawing.Point(0, 0)
     $acronym_list_form.MaximizeBox = $false
-    $acronym_list_form.Icon = $icon
     $acronym_list_form.SizeGripStyle = "Hide"
     $acronym_list_form.Width = 500
     $acronym_list_form.height = 600
@@ -12895,19 +13246,19 @@ function acronym_list_dialog($type)
 ######System Settings Dialog####################################################
 function system_settings_dialog
 {
-    
     $system_settings_form = New-Object System.Windows.Forms.Form
     $system_settings_form.FormBorderStyle = 'Fixed3D'
     $system_settings_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $system_settings_form.Location = new-object System.Drawing.Point(0, 0)
     $system_settings_form.MaximizeBox = $false
-    $system_settings_form.Icon = $icon
     $system_settings_form.SizeGripStyle = "Hide"
+    $system_settings_form.text                     = "System Settings";
     $system_settings_form.Width = 800
-    $system_settings_form.Height = 500
+    $system_settings_form.Height = 375
 
+    ################################################################################
+    ######Title#####################################################################
     $y_pos = 10;
-
     $title_label                          = New-Object system.Windows.Forms.Label
     $title_label.text                     = "System Settings";
     $title_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
@@ -12916,33 +13267,37 @@ function system_settings_dialog
     $title_label.width                    = ($system_settings_form.width)
     $title_label.height                   = 30
     $title_label.TextAlign = "MiddleCenter"
-    $title_label.location                 = New-Object System.Drawing.Point(($rename_button.Location.x + $rename_button.width + $spacer),$y_pos)
+    $title_label.location                 = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($title_label.width / 2)),$y_pos)
     $title_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
     $system_settings_form.controls.Add($title_label);
 
-    $y_pos = $y_pos + 45
 
+
+    ################################################################################
+    ######Calculator Label##########################################################
+    $y_pos = $y_pos + 45
     $text_size_calculator_label                          = New-Object system.Windows.Forms.Label
-    $text_size_calculator_label.text                     = "Text Size Calculation Display";
+    $text_size_calculator_label.text                     = "Text Calculation Display:";
     $text_size_calculator_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
     #$text_size_calculator_label.backcolor = "green"
     $text_size_calculator_label.Anchor                   = 'top,left'
     #$text_size_calculator_label.autosize = $true
-    $text_size_calculator_label.width                    = 300
+    $text_size_calculator_label.width                    = 225
     $text_size_calculator_label.height                   = 30
-    $text_size_calculator_label.TextAlign = "MiddleCenter"
-    $text_size_calculator_label.location                 = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($text_size_calculator_label.Width / 2)),$y_pos)
+    $text_size_calculator_label.TextAlign                 = "middleright"
+    $text_size_calculator_label.location                 = New-Object System.Drawing.Point(15,$y_pos)
     $text_size_calculator_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
     $system_settings_form.controls.Add($text_size_calculator_label);
     
-    $y_pos = $y_pos + 30;
 
+    ################################################################################
+    ######Calculator Trackbar#######################################################
     $text_size_calculator_trackbar_label = New-Object System.Windows.Forms.Label
     $text_size_calculator_trackbar = New-Object System.Windows.Forms.TrackBar
     $text_size_calculator_trackbar.Width = 80
-    $text_size_calculator_trackbar.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($text_size_calculator_trackbar.Width / 2)),$y_pos)
+    $text_size_calculator_trackbar.Location = New-Object System.Drawing.Point(($text_size_calculator_label.location.x + $text_size_calculator_label.width + 5),($y_pos -2))
     $text_size_calculator_trackbar.Orientation = "Horizontal"
-    $text_size_calculator_trackbar.Height = 40
+    $text_size_calculator_trackbar.Height = 30
     $text_size_calculator_trackbar.TickFrequency = 1
     $text_size_calculator_trackbar.TickStyle = "TopLeft"
     $text_size_calculator_trackbar.SetRange(1, 2) 
@@ -12966,48 +13321,48 @@ function system_settings_dialog
         update_settings;
     })
     $text_size_calculator_trackbar.Value = $script:settings['SIZER_BOX_INVERTED']
-    #write-host  Sizer Box: $script:settings['SIZER_BOX_INVERTED']
 
-    $y_pos = $y_pos + 30;
 
-            
+    ################################################################################
+    ######Calculator Trackbar Label#################################################
     $text_size_calculator_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
     $text_size_calculator_trackbar_label.width = 350
+    #$text_size_calculator_trackbar_label.backcolor = "green"
     $text_size_calculator_trackbar_label.text = "Count Down"
-    $text_size_calculator_trackbar_label.height = 60
-    $text_size_calculator_trackbar_label.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($text_size_calculator_trackbar_label.Width / 2)),$y_pos)
+    $text_size_calculator_trackbar_label.height = 30
+    $text_size_calculator_trackbar_label.Location = New-Object System.Drawing.Point(($text_size_calculator_trackbar.location.x + $text_size_calculator_trackbar.width + 5),$y_pos)
     $text_size_calculator_trackbar_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-    $text_size_calculator_trackbar_label.TextAlign = "MiddleCenter"
+    $text_size_calculator_trackbar_label.TextAlign = "Middleleft"
 
     $system_settings_form.Controls.Add($text_size_calculator_trackbar_label)
     $system_settings_form.controls.Add($text_size_calculator_trackbar)
 
 
-
-
-    $y_pos = $y_pos + 60;
-
+    ################################################################################
+    ######Calculator Trackbar Label 2###############################################
+    $y_pos = $y_pos + 50;
     $clock_speed_label                          = New-Object system.Windows.Forms.Label
     $clock_speed_label.text                     = "Application Clock Speed";
     $clock_speed_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
     #$clock_speed_label.backcolor = "green"
     $clock_speed_label.Anchor                   = 'top,left'
     #$clock_speed_label.autosize = $true
-    $clock_speed_label.width                    = 300
+    $clock_speed_label.width                    = 225
     $clock_speed_label.height                   = 30
-    $clock_speed_label.TextAlign = "MiddleCenter"
-    $clock_speed_label.location                 = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_label.Width / 2)),$y_pos)
+    $clock_speed_label.TextAlign = "Middleright"
+    $clock_speed_label.location                 = New-Object System.Drawing.Point(15,$y_pos)
     $clock_speed_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
     $system_settings_form.controls.Add($clock_speed_label);
 
-    $y_pos = $y_pos + 30;
 
+    ################################################################################
+    ######Clock Speed Trackbar######################################################
     $clock_speed_trackbar_label = New-Object System.Windows.Forms.Label
     $clock_speed_trackbar = New-Object System.Windows.Forms.TrackBar
-    $clock_speed_trackbar.Width = ($system_settings_form.Width - 200)
-    $clock_speed_trackbar.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_trackbar.Width / 2)),$y_pos)
+    $clock_speed_trackbar.Width = 250
+    $clock_speed_trackbar.Location = New-Object System.Drawing.Point(($clock_speed_label.location.x + $clock_speed_label.width + 5),$y_pos)
     $clock_speed_trackbar.Orientation = "Horizontal"
-    $clock_speed_trackbar.Height = 40
+    $clock_speed_trackbar.Height = 30
     $clock_speed_trackbar.TickFrequency = 500
     $clock_speed_trackbar.TickStyle = "TopLeft"
     $clock_speed_trackbar.SetRange(100, 3000) 
@@ -13015,58 +13370,232 @@ function system_settings_dialog
     $clock_speed_trackbar.AccessibleName = "Off"
     $clock_speed_trackbar.value = 100
     $clock_speed_trackbar.add_ValueChanged({
-    $value1 = 3100 - $this.value
-    $value3 = $value1 / 1000;
+        $value1 = 3100 - $this.value
+        $value3 = $value1 / 1000;
 
-    $this.AccessibleName = $value1
+        $this.AccessibleName = $value1
 
-    $value2 = $this.value 
-    $verb = "None"
+        $value2 = $this.value 
+        $verb = "None"
 
-    if($value2 -le 600)
-    {
-        $verb = "Slowest`n$value3 Seconds Between Operations"
+        if($value2 -le 600)
+        {
+            $verb = "$value3 Seconds Between Operations`nSlowest PCs"
 
-    }
-    elseif($value2 -le 1200)
-    {
-        $verb = "Slow`n$value3 Seconds Between Operations"
-    }
-    elseif($value2 -le 1800)
-    {
-        $verb = "Moderate`n$value3 Seconds Between Operations"
-    }
-    elseif($value2 -le 2400)
-    {
-        $verb = "Fast`n$value3 Seconds Between Operations"
-    }
-    elseif($value2 -le 3000)
-    {
-        $verb = "Fastest`n$value3 Seconds Between Operations"
-    }
+        }
+        elseif($value2 -le 1200)
+        {
+            $verb = "$value3 Seconds Between Operations`nSlow PCs"
+        }
+        elseif($value2 -le 1800)
+        {
+            $verb = "$value3 Seconds Between Operations`nModerate PCs"
+        }
+        elseif($value2 -le 2400)
+        {
+            $verb = "$value3 Seconds Between Operations`nFast PCs"
+        }
+        elseif($value2 -le 3000)
+        {
+            $verb = "$value3 Seconds Between Operations`nFastest PCs"
+        }
 
-    $message = "$verb"
+        $message = "$verb"
 
-    $clock_speed_trackbar_label.text = $message             
+        $clock_speed_trackbar_label.text = $message             
     })
     $clock_speed_trackbar.Value = (3100 - $script:settings['CLOCK_SPEED'])
-    #write-host  Clock Speed: $script:settings['CLOCK_SPEED']
 
-    $y_pos = $y_pos + 30;
 
-            
+    ################################################################################
+    ######Clock Speed Trackbar Label2######################################################        
     $clock_speed_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
-    $clock_speed_trackbar_label.width = 350
-    $clock_speed_trackbar_label.height = 60
-    $clock_speed_trackbar_label.Location = New-Object System.Drawing.Point((($system_settings_form.width / 2) - ($clock_speed_trackbar_label.Width / 2)),$y_pos)
+    $clock_speed_trackbar_label.width = 280
+    $clock_speed_trackbar_label.height = 30
+    $clock_speed_trackbar_label.Location = New-Object System.Drawing.Point(($clock_speed_trackbar.location.x + $clock_speed_trackbar.width + 5),$y_pos)
     $clock_speed_trackbar_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
     #$clock_speed_trackbar_label.BackColor = "Green"
-    $clock_speed_trackbar_label.TextAlign = "MiddleCenter"
+    $clock_speed_trackbar_label.TextAlign = "MiddleLeft"
     $system_settings_form.Controls.Add($clock_speed_trackbar_label)
     $system_settings_form.controls.Add($clock_speed_trackbar)
 
-     $y_pos = $y_pos + 70;
 
+
+    ################################################################################
+    ######Text History Threshold Label##############################################
+    $y_pos = $y_pos + 50
+    $text_history_threshold_label                          = New-Object system.Windows.Forms.Label
+    $text_history_threshold_label.text                     = "Text History Threshold:";
+    $text_history_threshold_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+    #$text_history_threshold_label.backcolor = "green"
+    $text_history_threshold_label.Anchor                   = 'top,left'
+    #$text_history_threshold_label.autosize = $true
+    $text_history_threshold_label.width                    = 225
+    $text_history_threshold_label.height                   = 30
+    $text_history_threshold_label.TextAlign                 = "middleright"
+    $text_history_threshold_label.location                 = New-Object System.Drawing.Point(15,$y_pos)
+    $text_history_threshold_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $system_settings_form.controls.Add($text_history_threshold_label);
+
+
+    ################################################################################
+    ######Clock Speed Trackbar######################################################
+    $text_history_threshold_label = New-Object System.Windows.Forms.Label
+    $text_history_threshold = New-Object System.Windows.Forms.TrackBar
+    $text_history_threshold.Width = 250
+    $text_history_threshold.Location = New-Object System.Drawing.Point(($clock_speed_label.location.x + $clock_speed_label.width + 5),$y_pos)
+    $text_history_threshold.Orientation = "Horizontal"
+    $text_history_threshold.Height = 30
+    $text_history_threshold.TickFrequency = 100
+    $text_history_threshold.TickStyle = "TopLeft"
+    $text_history_threshold.SetRange(50, 1000) 
+    $text_history_threshold.LargeChange = 500;
+    $text_history_threshold.AccessibleName = "Off"
+    $text_history_threshold.value = 100
+    $text_history_threshold.add_ValueChanged({
+        $value = $this.value
+ 
+        if($value -le 50)
+        {
+            $verb = "Slowest PCs"
+        }
+        elseif($value -le 100)
+        {
+            $verb = "Slow PCs"
+        }
+        elseif($value -le 500)
+        {
+            $verb = "Moderate PCs"
+        }
+        elseif($value -le 700)
+        {
+            $verb = "Fast PCs"
+        }
+        elseif($value -le 1000)
+        {
+            $verb = "Fastest PCs"
+        }
+        [string]$message = $this.value
+        [string]$message = $message + "`n$verb"
+
+        $text_history_threshold_label.text = $message           
+    })
+    $text_history_threshold.Value = $script:settings['SAVE_HISTORY_THRESHOLD']
+
+    ################################################################################
+    ######Clock Speed Trackbar Label2######################################################        
+    $text_history_threshold_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $text_history_threshold_label.width = 280
+    $text_history_threshold_label.height = 30
+    $text_history_threshold_label.Location = New-Object System.Drawing.Point(($text_history_threshold.location.x + $text_history_threshold.width + 5),$y_pos)
+    $text_history_threshold_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+    #$text_history_threshold_label.BackColor = "Green"
+    $text_history_threshold_label.TextAlign = "MiddleLeft"
+    $system_settings_form.Controls.Add($text_history_threshold_label)
+    $system_settings_form.controls.Add($text_history_threshold)
+
+
+    ################################################################################
+    ######Memory Flushing Label1####################################################
+    $y_pos = $y_pos + 50
+    $memory_flushing_label                          = New-Object system.Windows.Forms.Label
+    $memory_flushing_label.text                     = "Memory Flushing (Beta):";
+    $memory_flushing_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+    #$memory_flushing_label.backcolor = "green"
+    $memory_flushing_label.Anchor                   = 'top,left'
+    #$memory_flushing_label.autosize = $true
+    $memory_flushing_label.width                    = 225
+    $memory_flushing_label.height                   = 30
+    $memory_flushing_label.TextAlign                 = "middleright"
+    $memory_flushing_label.location                 = New-Object System.Drawing.Point(15,$y_pos)
+    $memory_flushing_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $system_settings_form.controls.Add($memory_flushing_label);
+
+
+    ################################################################################
+    ######Memory Flushing Trackbar##################################################
+    $memory_flushing_trackbar_label = New-Object System.Windows.Forms.Label
+    $memory_flushing_trackbar = New-Object System.Windows.Forms.TrackBar
+    $memory_flushing_trackbar.Width = 150
+    $memory_flushing_trackbar.Location = New-Object System.Drawing.Point(($memory_flushing_label.location.x + $memory_flushing_label.width + 5),($y_pos -2))
+    $memory_flushing_trackbar.Orientation = "Horizontal"
+    $memory_flushing_trackbar.Height = 30
+    $memory_flushing_trackbar.TickFrequency = 1
+    $memory_flushing_trackbar.TickStyle = "TopLeft"
+    $memory_flushing_trackbar.SetRange(1, 4) 
+    $memory_flushing_trackbar.LargeChange = 1;
+    $memory_flushing_trackbar.AccessibleName = "Off"
+    $memory_flushing_trackbar.value = 1
+    $memory_flushing_trackbar.add_ValueChanged({
+        if($this.value -eq 1)
+        {
+            $memory_flushing_trackbar_label.text = "Off"
+        }
+        elseif($this.value -eq 2)
+        {
+            $memory_flushing_trackbar_label.text = "Garbage Collect Only"
+        }
+        elseif($this.value -eq 3)
+        {
+            $memory_flushing_trackbar_label.text = "Memory Flushing Only (Recommended)"
+        }
+        else
+        {
+            $memory_flushing_trackbar_label.text = "Memory Flushing & Garbage Collect"
+        }
+    })
+    $memory_flushing_trackbar.Value = $script:settings['MEMORY_FLUSHING']
+
+
+    ################################################################################
+    ######Memory Flushing Trackbar Label#############################################
+    $memory_flushing_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $memory_flushing_trackbar_label.width = 330
+    $memory_flushing_trackbar_label.height = 30
+    $memory_flushing_trackbar_label.Location = New-Object System.Drawing.Point(($memory_flushing_trackbar.location.x + $memory_flushing_trackbar.width + 5),$y_pos)
+    $memory_flushing_trackbar_label.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+    #$memory_flushing_trackbar_label.BackColor = "Green"
+    $memory_flushing_trackbar_label.TextAlign = "MiddleLeft"
+    $system_settings_form.Controls.Add($memory_flushing_trackbar_label)
+    $system_settings_form.controls.Add($memory_flushing_trackbar)
+
+
+
+    ################################################################################
+    ######Memory Usage Label1#######################################################
+    $y_pos = $y_pos + 50
+    $memory_usage_label1                          = New-Object system.Windows.Forms.Label
+    $memory_usage_label1.text                     = "Current Memory Usage:";
+    $memory_usage_label1.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+    #$memory_usage_label1.backcolor = "green"
+    $memory_usage_label1.Anchor                   = 'top,left'
+    #$memory_usage_label1.autosize = $true
+    $memory_usage_label1.width                    = 225
+    $memory_usage_label1.height                   = 30
+    $memory_usage_label1.TextAlign                 = "middleright"
+    $memory_usage_label1.location                 = New-Object System.Drawing.Point(15,$y_pos)
+    $memory_usage_label1.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $system_settings_form.controls.Add($memory_usage_label1);
+
+
+    ################################################################################
+    ######Memory Usage Label 2######################################################
+    $current_memory = (Get-Process -id $PID | Sort-Object WorkingSet64 | Select-Object Name,@{Name='WorkingSet';Expression={($_.WorkingSet64)}})
+    $current_memory = [System.Math]::Round(($current_memory.WorkingSet)/1mb, 2)
+    $memory_usage_label2            = New-Object System.Windows.Forms.Label     
+    $memory_usage_label2.Font       = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+    $memory_usage_label2.Text       = "$current_memory MB"
+    $memory_usage_label2.width      = 280
+    $memory_usage_label2.height     = 30
+    $memory_usage_label2.Location   = New-Object System.Drawing.Point(($memory_usage_label1.location.x + $memory_usage_label1.width + 5),$y_pos)
+    $memory_usage_label2.ForeColor  = $script:theme_settings['DIALOG_FONT_COLOR']
+    $memory_usage_label2.TextAlign  = "MiddleLeft"
+    $system_settings_form.Controls.Add($memory_usage_label2)
+
+
+    ################################################################################
+    ######Submit Button#############################################################
+    $y_pos = $y_pos + 40;
     $submit_button           = New-Object System.Windows.Forms.Button
     $submit_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
     $submit_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
@@ -13079,15 +13608,17 @@ function system_settings_dialog
     $submit_button.Add_Click({
         $script:settings['CLOCK_SPEED'] = $clock_speed_trackbar.AccessibleName
         $Script:Timer.Interval = $script:settings['CLOCK_SPEED']
-        #write-host Clockspeed Set: $script:settings['CLOCK_SPEED']
+
+        $script:settings['SAVE_HISTORY_THRESHOLD'] = $text_history_threshold.value
+        $script:settings['MEMORY_FLUSHING'] = $memory_flushing_trackbar.value
         update_settings;
         $system_settings_form.close();
 
     });
     $system_settings_form.controls.Add($submit_button)
 
-   
-
+    ################################################################################
+    ######Submit Button#############################################################
     $cancel_button           = New-Object System.Windows.Forms.Button
     $cancel_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
     $cancel_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
@@ -13109,23 +13640,64 @@ Function Log($message)
 {
     if(($script:print_to_log -eq 1) -or ($script:print_to_console -eq 1))
     {
-        $memAfter = (Get-Process -id $pid).WS
-        $memory = ($memAfter - $script:memBefore) / 1MB
-        $memory = [math]::Round($memory,2)
-        While($memory.length -lt 10)
+        if($message -eq "BLANK")
         {
-            $memory = "$memory" + " ";
+            Add-Content -literalpath "$script:logfile" -Value ""
+            write-host ""
         }
-        $var_count = (get-variable).count
-        $stamp = (Get-Date).toString("yyyy/MM/dd HH:mm:ss")
-        $line = "$Stamp - Mem: $memory - Vars: $var_count $Message"
-        if($script:print_to_log -eq "1")
+        elseif(($message.length -ge 7) -and ($message.Substring(0,7) -eq "SUBLOG "))
         {
-            Add-Content -literalpath "$script:logfile" -Value $line
+             $message = $message.Substring(7,($message.Length - 7))
+             write-host $message
         }
-        if($script:print_to_console -eq "1")
+        else
         {
-            Write-host $line
+
+            ###Get Total Memory
+            #$memory_total          = [System.Math]::Round((((Get-Process -Id $PID | workingset64 –auto).PrivateMemorySize))/1mb, 2)
+            $memory_total = (Get-Process -id $PID | Sort-Object WorkingSet64 | Select-Object Name,@{Name='WorkingSet';Expression={($_.WorkingSet64)}})
+            $memory_total = [System.Math]::Round(($memory_total.WorkingSet)/1mb, 2)
+
+            ###Calculate Thread changes
+            if($message -match "Start")
+            {
+                $script:log_mem_change = $memory_total
+                [string]$mem_change_string = 0
+            }
+            else
+            {
+                $script:log_mem_change = [System.Math]::Round(($memory_total - $script:log_mem_change),2)
+                [string]$mem_change_string = $script:log_mem_change
+            }
+            
+            
+            
+                 
+            $memory_diff           = [System.Math]::Round(($memory_total - $script:memBefore),2)
+            While($memory_diff.tostring().length -lt 8)
+            {
+                $memory_diff = "$memory_diff" + " ";
+            }
+            While($memory_total.tostring().length -lt 8)
+            {
+                $memory_total = "$memory_total" + " ";
+            }
+            While($mem_change_string.length -lt 5)
+            {
+                $mem_change_string = $mem_change_string + " ";
+            }
+            $var_count = (get-variable).count
+            $stamp = (Get-Date).toString("yyyy/MM/dd HH:mm:ss")
+            $line = "$Stamp - Mem Start Diff: $memory_diff - Mem Total: $memory_total - Mem Thread Change: $mem_change_string - Vars: $var_count $Message"
+            $script:log_mem_change = $memory_total
+            if($script:print_to_log -eq "1")
+            {
+                Add-Content -literalpath "$script:logfile" -Value $line
+            }
+            if($script:print_to_console -eq "1")
+            {
+                Write-host $line
+            }
         }
     }
 }
@@ -13218,7 +13790,7 @@ function var_sizes
                 elseif($type -match "^int|^double|^float|^long")
                 {
                     #write-host ----------------$type
-                    $size = ($var.name.Length) + ($var.value.length)
+                    $size = (($var.name).tostring.Length) + (($var.value).tostring.length)
                     #write-host $var.name $var.value
                     $var_sizes["Int    - $name"] = $size
                 }
@@ -13264,7 +13836,6 @@ function FAQ_dialog
     $FAQ_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $FAQ_form.Location = new-object System.Drawing.Point(0, 0)
     $FAQ_form.MaximizeBox = $false
-    $FAQ_form.Icon = $icon
     $FAQ_form.SizeGripStyle = "Hide"
     $FAQ_form.Width = 1200
     $FAQ_form.Height = 600
@@ -13360,7 +13931,6 @@ function about_dialog
     $about_form.BackColor             = $script:theme_settings['DIALOG_BACKGROUND_COLOR']
     $about_form.Location = new-object System.Drawing.Point(0, 0)
     $about_form.MaximizeBox = $false
-    $about_form.Icon = $icon
     $about_form.SizeGripStyle = "Hide"
     $about_form.Width = 800
     $about_form.Height = 600
@@ -13488,10 +14058,25 @@ function about_dialog
     $version_box.AccessibleName = "";
     $version_box.text = "
     --------------------------------------------------------------------
+    Version 1.3:
+    --------------------------------------------------------------------
+    Date: 2 Dec 2021
+    New Feature: Ability to lookup words via WordHippo.
+    New Feature: Overhauled System Settings
+    Update: Added/Updated Default Theme `"Dark Castle`"
+    Performance: History File now has limited growth in memory (Beta)  
+    Performance: Ability to control memory flushing (Beta)
+    Bug Fixed: Changed Text Size calculation by 1 pixel.               
+    Bug Fixed: Fixed issue with changing theme colors
+    Bug Fixed: Removed gap above sidekick window
+    Bug Fixed: Fixed issue with left mouse clicks
+    Bug Fixed: Removed Invalid Match types
+    Bug Fixed: Ensured Settings file validations
+    
+    --------------------------------------------------------------------
     Version 1.2:
     --------------------------------------------------------------------
-    Bug Fixed?: Closing of Themes Dialog causes Bullet Blender & ISE to crash. 
-        (I was unable to replicate this error on my computer so It might still exist) 
+    Bug Fixed: Closing of Themes Dialog causes Bullet Blender & ISE to crash. 
 
     --------------------------------------------------------------------
     Version 1.1:
@@ -13526,7 +14111,8 @@ function about_dialog
     Feature Added: Text Compression
     Project Released: 27 April 2021
 
-    -------------------------------------------------------------------- 
+    --------------------------------------------------------------------  
+ 
 
     "
 
@@ -13555,18 +14141,23 @@ $script:left_panel                                     = New-Object system.Windo
 Log "Initial Checks Start"
 initial_checks;
 Log "Initial Checks End"
+Log "BLANK"
 Log "Loading Settings Start"
 load_settings;
 Log "Loading Settings End"
+Log "BLANK"
 Log "Loading Theme Start"
 load_theme
 Log "Loading Theme End"
+Log "BLANK"
 Log "Loading Character Blocks Start"
 load_character_blocks;
 Log "Loading Character Blocks End"
+Log "BLANK"
 Log "Loading Dictionary Start"
 load_dictionary;
 Log "Loading Dictionary End"
+Log "BLANK"
 Log "Main Start"
 main;
 
