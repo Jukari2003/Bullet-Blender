@@ -2,6 +2,8 @@
 Air Force Bullet Generation System
 
 
+![alt text](https://github.com/Jukari2003/Bullet-Blender/blob/main/Resources/Required/Bullet_Blender_Preview.png?raw=true)
+
     Usage Instructions:
         - Download Bullet_Blender.zip from GitHub
         - Extract Files to a desired location
