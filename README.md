@@ -6,6 +6,8 @@ Air Force Bullet Generation System
 
     Usage Instructions:
         - Download Bullet_Blender.zip from GitHub
+            - Top Right Hand Corner Click "Code"
+            - Select "Download Zip"
         - Extract Files to a desired location
         - Right Click on BB.ps1
         - Click "Edit"     (This should open up Bullet Blender in Powershell ISE)
