@@ -36,7 +36,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.3.1 (Beta - 2 Dec 2021)"
+$script:program_version = "1.4 (Beta - 4 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
@@ -109,7 +109,21 @@ $script:color_picker = "";                 #Transfers color to Colorpicker
 $script:sidekick_job = "";                 #Tracks the job for Sidekick metrics/activity
 $script:sidekick_results = "";             #Retrieves Sidekick Job Results
 $script:sidekickgui = "New";               #Tracks Rebuild of Sidekick Window
-$script:Format_error = "";
+$script:package_name_value = "";           #Form Object Tracks Right Pane Package Name
+$script:bullets_loaded_name_value = "";    #Form Object Tracks Right Pane Loaded Bullet Count
+$script:acronyms_loaded_name_value = "";   #Form Object Tracks Right Pane Acronym Count
+$script:location_value = "";               #Form Object Tracks Right Pane Users Current Line
+$script:headers_count_name_value = "";     #Form Object Tracks Right Pane Header Count
+$script:bullets_count_name_value = "";     #Form Object Tracks Right Pane Package Bullet Count
+$script:word_count_name_value = "";        #Form Object Tracks Right Pane Word Count
+$script:unique_acro_count_name_value = ""; #Form Object Tracks Right Pane Unique Acronyms
+$script:formating_errors_combo = "";       #Form Object Tracks Right Pane Formatting Errors
+$format_error = "";            #Hash Containing Formatting Errors
+$script:consistency_errors_combo = "";     #Form Object Tracks Right Pane Consistency Errors
+$script:top_used_acros_combo = "";         #Form Object Tracks Right Pane Top Used Acronyms
+$script:top_used_words_combo = "";         #Form Object Tracks Right Pane Top Used Words
+$script:metrics_used_combo = "";           #Form Object Tracks Right Pane Metrics Used
+$script:compression_trackbar_label = "";   #Form Object Displays Trackbar Setting
 
 ##History Vars
 $script:old_text = "";                     #Used for tracking changes between new editor text and previous text
@@ -125,7 +139,6 @@ $script:save_history_job = "";             #Tracks the job of saving history
 $script:save_history_timer = Get-Date      #Tracks the last time a job was ran
 $script:save_history_tracker = 0;          #Tracks the last place in history that was saved
 
-
 ##Calculate Text Size Vars
 $script:bullets_and_sizes  = new-object System.Collections.Hashtable #Tracks current bullet sizes
 $script:bullets_and_lines  = new-object System.Collections.Hashtable #Tracks location of bullets
@@ -134,13 +147,14 @@ $script:space_hash         = new-object System.Collections.Hashtable #Text Compr
 $character_blocks          = new-object System.Collections.Hashtable #Sizes list for all characters
 
 ##Idle Timer
-if($Script:Timer){$Script:Timer.Dispose();}
+if(Test-Path variable:Script:Timer){$Script:Timer.Dispose();}
 $Script:Timer = New-Object System.Windows.Forms.Timer                #Main system timer, most functions load through this timer
 $Script:Timer.Interval = 1000
 $Script:CountDown = 1
+
 ##Variable Flushing
 $script:main_vars = @()                                                 #Contains List of Startup Variables
-$script:main_vars = Get-Variable | Select-Object -ExpandProperty Name   #Contains List of Startup Variables
+
 
 ################################################################################
 ######Main######################################################################
@@ -267,7 +281,6 @@ function main
     ##Edit Menu
     build_edit_menu
 
-
     #################################################################################
     ##Bullet Menu
     build_bullet_menu
@@ -377,10 +390,6 @@ function main
     $ghost_editor.Location                          = New-Object System.Drawing.Size(($editor.width + 50),40)
     $ghost_editor.WordWrap                          = $false
     $ghost_editor.Multiline                         = $true
-
-    ################################################################################
-    ##Ghost Text Sizer
-    #$ghost_sizer_box                                = New-Object CustomRichTextBox #New-Object System.Windows.Forms.RichTextBox
 
     #################################################################################
     ##Bullet Feed Panel
@@ -3406,8 +3415,6 @@ function right_click_menu
 	            $contextMenuStrip1.Items.Add($dic_menu)
             }
             
-
-
             $dic_menu = [System.Windows.Forms.ToolStripMenuItem]::new()
             $dic_menu.text = "Add to Dictionary"
             $dic_menu.Backcolor = $script:theme_settings['MENU_BACKGROUND_COLOR']
@@ -4549,23 +4556,6 @@ function scan_text
     }#Compression ON
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     $ghost_editor.ZoomFactor = $editor.ZoomFactor
     $ghost_editor.SelectAll();
     $ghost_editor.SelectionColor = [System.Drawing.ColorTranslator]::FromHtml($script:theme_settings['EDITOR_FONT_COLOR'])
@@ -4802,9 +4792,8 @@ function scan_text
                 $ghost_editor.DeselectAll()
             }     
             
-        }
-
-    }
+        }#Foreach Matches
+    }#If Matches
     ###################################################################
     foreach($entry in $script:acro_index.getEnumerator() | sort key)
     {
@@ -5240,7 +5229,7 @@ Function Idle_Timer
         #write-host Feeder Update $script:caret_position = $editor.SelectionStart = $script:feeder_job.state
         
         ##Update Line Location
-        if((($script:location_value -ne "") -and ($script:caret_position -ne $editor.SelectionStart)) -or ($editor.Text -cne "$Script:recent_editor_text"))
+        if(((Test-path variable:script:location_value) -and ($script:caret_position -ne $editor.SelectionStart)) -or ($editor.Text -cne "$Script:recent_editor_text"))
         {
             #write-host Finding
             $lines = $editor.text -split "`n";
@@ -5284,7 +5273,7 @@ Function Idle_Timer
                     }
                     
                     $script:current_line = $counter
-                    if(($script:location_value.text) -and ($script:location_value.text -ne $counter))
+                    if(($script:location_value -ne "") -and ($script:location_value.text -ne $counter))
                     {
                         #Update Sidekick "Current Line"
                         $script:location_value.text = $counter
@@ -5316,12 +5305,8 @@ Function Idle_Timer
         Log "BLANK"
     }
 
-
-
     #########################################################################################
     ###Save History & Run Memory Cleanup
-    #$duration = (Get-Date) - $script:save_history_timer
-    #if(($duration.TotalSeconds -gt 10) -or (($script:save_history_job -ne "") -and ([string]$script:save_history_job.state -eq "Completed")))
     if((((Get-Date) - $script:save_history_timer).TotalSeconds -gt 10) -or (($script:save_history_job -ne "") -and ([string]$script:save_history_job.state -eq "Completed")))
     {
         Log "Save History Start"
@@ -5384,7 +5369,6 @@ Function Idle_Timer
 ######Initial Checks############################################################
 function initial_checks
 {
-    #write-host $dir
     if(!(test-path -LiteralPath "$dir\Resources"))
     {
         New-Item  -ItemType directory -Path "$dir\Resources"
@@ -11648,7 +11632,8 @@ function update_sidekick
                 [string]$editor_text = $editor_text.text
             
                 $unique_acros = @{};
-                $acro_counter = @{};
+                $real_acro_list = @{};
+                $total_acronyms = 0;
                 $consistency_errors = @{};
                 $metrics = @{};
                 $script:Formating_errors = @{};
@@ -11661,7 +11646,17 @@ function update_sidekick
                     ($mode,$index,$acronym,$meaning) = $acro.key -split "::"
                 
                     ###########################################################################
-                    #Check consistency
+                    ##Check to see if this is an acro within an acro
+                    $acro_within_acro = 0;
+                    if(($index -ne 0) -and ($index + $acronym.Length -le $editor_text.Length))
+                    {
+                        if(!(($editor_text).Substring(($index - 1),1) -match '[^A-Za-z0-9]'))
+                        {
+                            $acro_within_acro = 1;
+                        }
+                    }
+                    ###########################################################################
+                    ##Check consistency
                     $found = 0;
                     if($mode -eq "S")
                     {
@@ -11674,16 +11669,17 @@ function update_sidekick
                                 if(!($consistency_errors.contains($acronym)))
                                 {
                                     $consistency_errors.add($acronym,$acronym2);
+                                    #write-host $acro_within_acro = $acronym = $meaning   
                                 }
                             }
-
                         }
                     }
 
-                    ###########################################################################
-                    if(!($acro_counter.Contains("$mode::$acronym::$meaning")))
+                    ##################################################################################
+                    ##Make EPR/Award List
+                    if(!($real_acro_list.Contains("$mode::$acronym::$meaning")) -and ($acro_within_acro -ne 1))
                     {
-                        $acro_counter.Add("$mode::$acronym::$meaning",1);
+                        $real_acro_list.Add("$mode::$acronym::$meaning",1);
                         ###########################################################################
                         ##Build Acro List
                         if($mode -eq "E")
@@ -11699,33 +11695,38 @@ function update_sidekick
                                 $meaning = $meaning -creplace "And","and"
                                 $meaning = $meaning -creplace "  "," "
                                 $meaning = $meaning.trim();
-                                if(!($acro_list.contains($meaning)))
+
+                                if((!($acro_list.contains($meaning))) -and ($acro_within_acro -ne 1))
                                 {
-                                    $acro_list.Add($meaning,$acronym);
+                                    #write-host $acro_within_acro = $acronym = $meaning
+                                    $acro_list.Add($meaning,$acronym);      
                                 }
                             }
 
                         }
                         ###########################################################################
                     }
-                    else
+                    elseif($acro_within_acro -ne 1)
                     {
-                        $acro_counter["$mode::$acronym::$meaning"]++;
-                        #write-host $acronym $acro_counter[$acronym]
+                        $real_acro_list["$mode::$acronym::$meaning"]++;
+                        #write-host $acronym $real_acro_list[$acronym]
                     }
                 }
-                ###################Make Unique List
-                $counter = 0      
-                foreach($acro in $acro_counter.getEnumerator() | sort value -descending)
+                ##################################################################################
+                ##Make Unique List
+                $counter = 0 
+                foreach($acro in $real_acro_list.getEnumerator() | sort value -descending)
                 {
                     ($mode,$acronym,$meaning) = $acro.key -split '::'
                     if($mode -eq "E")
                     {
                         $counter++;
                         #write-host - $acronym = $acro.value
-                        if(!($unique_acros.Contains($acronym)))
+                        if((!($unique_acros.Contains($acronym))))
                         {
                             $unique_acros.add($acronym,$acro.value)
+                            
+                            $total_acronyms = $total_acronyms + $acro.value
                         }
                     }
                 }
@@ -12033,11 +12034,11 @@ function update_sidekick
                     if($word.length -gt 1)
                     {
                         $word_count++
-                        if(!($word_counter.contains($word)) -and (!($acro_counter.keys -match "E::$word")))
+                        if(!($word_counter.contains($word)) -and (!($real_acro_list.keys -match "E::$word")))
                         {
                             $word_counter.add($word,1);
                         }
-                        elseif(!($acro_counter.keys -match "E::$word"))
+                        elseif(!($real_acro_list.keys -match "E::$word"))
                         {
                             $word_counter[$word]++;
                         }
@@ -12045,7 +12046,7 @@ function update_sidekick
                 }
       
 
-                $result = @{"acro_list" = $($acro_list); "consistency_errors" = $($consistency_errors);"unique_acros" = $($unique_acros);"word_counter" = $($word_counter);"acro_counter" = $($acro_counter); "header_count" = $($header_count); "bullet_count" = $($bullet_count); "word_count" = $($word_count);"formating_errors" = $($script:Formating_errors);"metrics" = $($metrics);}
+                $result = @{"total_acronyms" = $($total_acronyms); "acro_list" = $($acro_list); "consistency_errors" = $($consistency_errors);"unique_acros" = $($unique_acros);"word_counter" = $($word_counter);"acro_counter" = $($real_acro_list); "header_count" = $($header_count); "bullet_count" = $($bullet_count); "word_count" = $($word_count);"formating_errors" = $($script:Formating_errors);"metrics" = $($metrics);}
                 return ($result)
             }
         }
@@ -12081,71 +12082,13 @@ function sidekick_display
         {
             $script:sidekickgui = "Built"
             $left_panel.Controls.Clear();
-
-
-            ################################################################################
-            ######Sidekick Debug############################################################
-            $dubug_printer = 0;
-            if($dubug_printer -eq "1")
-            {
-
-                write-host
-                write-host Word Count:
-                write-host - $script:sidekick_results.word_count
-
-                write-host
-                write-host Bullets:
-                write-host - $script:sidekick_results.bullet_count
-
-                write-host
-                write-host Headers:
-                write-host - $script:sidekick_results.header_count
-
-                write-host
-                write-host Unique Acronyms:
-                write-host  - $script:sidekick_results.acro_counter.get_count();
-
-                write-host
-                Write-host Top Used Acronyms:
-                foreach($acro in $script:sidekick_results.unique_acros.getEnumerator() | sort value -descending | Select-Object -First 10)
-                {
-                    write-host - $acro.key = $acro.value
-                }
-
-                write-host
-                Write-host Word Usage:
-                foreach($word in $script:sidekick_results.word_counter.getEnumerator() | sort value -descending | Select-Object -First 10)
-                {
-                    write-host  - $word.key = $word.value
-                }
-
-                write-host
-                Write-host Formating Errors:
-                foreach($script:Format_error in $script:sidekick_results.formating_errors.getEnumerator() | sort value)
-                {
-                    write-host  - $script:Format_error.key
-                }
-
-                write-host
-                Write-host Consistency Errors:
-                foreach($consistency_error in $script:sidekick_results.consistency_errors.getEnumerator())
-                {
-                    write-host  - $consistency_error.key $consistency_error.value
-                }
-
-                write-host
-                Write-host Metrics:
-                foreach($metric in $script:sidekick_results.metrics.getEnumerator() | sort value)
-                {
-                    write-host  - $metric.key $metric.value
-                }
-            }
-
             ################################################################################
             ######Sidekick Build Fresh Window###############################################
             $y_pos = 5
 
-            $script:basic_info_label                   = New-Object system.Windows.Forms.Label
+            ################################################################################
+            ######Basic Info Label##########################################################
+            $basic_info_label                   = New-Object system.Windows.Forms.Label
             $basic_info_label.text                     = "System Info";
             $basic_info_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
             $basic_info_label.Backcolor                = $script:theme_settings['DIALOG_TITLE_BANNER_COLOR']
@@ -12155,12 +12098,13 @@ function sidekick_display
             $basic_info_label.TextAlign = "MiddleCenter"
             $basic_info_label.location                 = New-Object System.Drawing.Point(0,$y_pos)
             $basic_info_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
-
             $left_panel.Controls.Add($basic_info_label)
 
-            $y_pos = $y_pos + 25;
 
-            $script:package_name_label                   = New-Object system.Windows.Forms.Label
+            ################################################################################
+            ######Package Name Label########################################################
+            $y_pos = $y_pos + 25;
+            $package_name_label                   = New-Object system.Windows.Forms.Label
             $package_name_label.text                     = "Package Name:";
             $package_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
             $package_name_label.Anchor                   = 'top,right'
@@ -12172,21 +12116,26 @@ function sidekick_display
             $package_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($package_name_label);
 
+
+            ################################################################################
+            ######Package Name Value########################################################
             $script:package_name_value                   = New-Object system.Windows.Forms.Label
-            $package_name_value.text                     = $script:settings['PACKAGE']
-            $package_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $package_name_value.Anchor                   = 'top,right'
-            $package_name_value.autosize = $true
-            $package_name_value.TextAlign = "MiddleLeft"
-            $package_name_value.width                    = 150
-            $package_name_value.height                   = 30
-            $package_name_value.location                 = New-Object System.Drawing.Point((10 + $package_name_label.width),$y_pos);
-            $package_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($package_name_value);
+            $script:package_name_value.text                     = $script:settings['PACKAGE']
+            $script:package_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:package_name_value.Anchor                   = 'top,right'
+            $script:package_name_value.autosize = $true
+            $script:package_name_value.TextAlign = "MiddleLeft"
+            $script:package_name_value.width                    = 150
+            $script:package_name_value.height                   = 30
+            $script:package_name_value.location                 = New-Object System.Drawing.Point((10 + $package_name_label.width),$y_pos);
+            $script:package_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:package_name_value);
 
+
+            ################################################################################
+            ######Bullets Loaded Label######################################################
             $y_pos = $y_pos + 25;
-
-            $script:bullets_loaded_name_label                          = New-Object system.Windows.Forms.Label
+            $bullets_loaded_name_label                          = New-Object system.Windows.Forms.Label
             $bullets_loaded_name_label.text                     = "Bullets Loaded:";
             $bullets_loaded_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
             $bullets_loaded_name_label.Anchor                   = 'top,right'
@@ -12198,21 +12147,26 @@ function sidekick_display
             $bullets_loaded_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($bullets_loaded_name_label);
 
+
+            ################################################################################
+            ######Bullets Loaded Value######################################################
             $script:bullets_loaded_name_value                          = New-Object system.Windows.Forms.Label
-            $bullets_loaded_name_value.text                     = $Script:bullet_bank.Get_Count()
-            $bullets_loaded_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $bullets_loaded_name_value.Anchor                   = 'top,right'
-            $bullets_loaded_name_value.autosize = $true
-            $bullets_loaded_name_value.TextAlign = "MiddleLeft"
-            $bullets_loaded_name_value.width                    = 150
-            $bullets_loaded_name_value.height                   = 30
-            $bullets_loaded_name_value.location                 = New-Object System.Drawing.Point((10 + $bullets_loaded_name_label.width),$y_pos);
-            $bullets_loaded_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($bullets_loaded_name_value);
+            $script:bullets_loaded_name_value.text                     = $Script:bullet_bank.Get_Count()
+            $script:bullets_loaded_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:bullets_loaded_name_value.Anchor                   = 'top,right'
+            $script:bullets_loaded_name_value.autosize = $true
+            $script:bullets_loaded_name_value.TextAlign = "MiddleLeft"
+            $script:bullets_loaded_name_value.width                    = 150
+            $script:bullets_loaded_name_value.height                   = 30
+            $script:bullets_loaded_name_value.location                 = New-Object System.Drawing.Point((10 + $bullets_loaded_name_label.width),$y_pos);
+            $script:bullets_loaded_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:bullets_loaded_name_value);
 
+
+            ################################################################################
+            ######Acronyms Loaded Label#####################################################
             $y_pos = $y_pos + 25;
-
-            $script:acronyms_loaded_name_label                   = New-Object system.Windows.Forms.Label
+            $acronyms_loaded_name_label                   = New-Object system.Windows.Forms.Label
             $acronyms_loaded_name_label.text                     = "Acronyms Loaded:";
             $acronyms_loaded_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
             $acronyms_loaded_name_label.Anchor                   = 'top,right'
@@ -12224,20 +12178,25 @@ function sidekick_display
             $acronyms_loaded_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($acronyms_loaded_name_label);
 
+
+            ################################################################################
+            ######Acronyms Loaded Value#####################################################
             $script:acronyms_loaded_name_value                   = New-Object system.Windows.Forms.Label
-            $acronyms_loaded_name_value.text                     = $script:acronym_list.Get_Count()
-            $acronyms_loaded_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $acronyms_loaded_name_value.Anchor                   = 'top,right'
-            $acronyms_loaded_name_value.autosize = $true
-            $acronyms_loaded_name_value.TextAlign = "MiddleLeft"
-            $acronyms_loaded_name_value.width                    = 150
-            $acronyms_loaded_name_value.height                   = 30
-            $acronyms_loaded_name_value.location                 = New-Object System.Drawing.Point((10 + $acronyms_loaded_name_label.width),$y_pos);
-            $acronyms_loaded_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($acronyms_loaded_name_value);
+            $script:acronyms_loaded_name_value.text                     = $script:acronym_list.Get_Count()
+            $script:acronyms_loaded_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:acronyms_loaded_name_value.Anchor                   = 'top,right'
+            $script:acronyms_loaded_name_value.autosize = $true
+            $script:acronyms_loaded_name_value.TextAlign = "MiddleLeft"
+            $script:acronyms_loaded_name_value.width                    = 150
+            $script:acronyms_loaded_name_value.height                   = 30
+            $script:acronyms_loaded_name_value.location                 = New-Object System.Drawing.Point((10 + $acronyms_loaded_name_label.width),$y_pos);
+            $script:acronyms_loaded_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:acronyms_loaded_name_value);
 
+
+            ################################################################################
+            ######User Location Label#######################################################
             $y_pos = $y_pos + 25;
-
             $location_label                          = New-Object system.Windows.Forms.Label
             $location_label.text                     = "Current Line:";
             $location_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12250,20 +12209,24 @@ function sidekick_display
             $location_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######User Location Value#######################################################
             $script:location_value                   = New-Object system.Windows.Forms.Label
-            $location_value.text                     = $script:current_line
-            $location_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $location_value.Anchor                   = 'top,right'
-            $location_value.autosize = $true
-            $location_value.TextAlign = "MiddleLeft"
-            $location_value.width                    = 150
-            $location_value.height                   = 30
-            $location_value.location                 = New-Object System.Drawing.Point((10 + $location_label.width),$y_pos);
-            $location_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($location_value);
+            $script:location_value.text                     = $script:current_line
+            $script:location_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:location_value.Anchor                   = 'top,right'
+            $script:location_value.autosize = $true
+            $script:location_value.TextAlign = "MiddleLeft"
+            $script:location_value.width                    = 150
+            $script:location_value.height                   = 30
+            $script:location_value.location                 = New-Object System.Drawing.Point((10 + $location_label.width),$y_pos);
+            $script:location_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:location_value);
     
-            $y_pos = $y_pos + 35;
 
+            ################################################################################
+            ######Package Info Header#######################################################
+            $y_pos = $y_pos + 35;
             $package_info_label                          = New-Object system.Windows.Forms.Label
             $package_info_label.text                     = "Package Information";
             $package_info_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
@@ -12277,8 +12240,10 @@ function sidekick_display
             $left_panel.Controls.Add($package_info_label)
             $left_panel.controls.Add($location_label);
 
-            $y_pos = $y_pos + 25;
 
+            ################################################################################
+            ######Header Count Label########################################################
+            $y_pos = $y_pos + 25;
             $headers_count_name_label                          = New-Object system.Windows.Forms.Label
             $headers_count_name_label.text                     = "Headers:";
             $headers_count_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12291,20 +12256,25 @@ function sidekick_display
             $headers_count_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($headers_count_name_label);
 
+
+            ################################################################################
+            ######Header Count Value########################################################
             $script:headers_count_name_value                          = New-Object system.Windows.Forms.Label
-            $headers_count_name_value.text                     = $script:sidekick_results.header_count
-            $headers_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $headers_count_name_value.Anchor                   = 'top,right'
-            $headers_count_name_value.autosize = $true
-            $headers_count_name_value.TextAlign = "MiddleLeft"
-            $headers_count_name_value.width                    = 150
-            $headers_count_name_value.height                   = 30
-            $headers_count_name_value.location                 = New-Object System.Drawing.Point((10 + $headers_count_name_label.width),$y_pos);
-            $headers_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($headers_count_name_value);
+            $script:headers_count_name_value.text                     = $script:sidekick_results.header_count
+            $script:headers_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:headers_count_name_value.Anchor                   = 'top,right'
+            $script:headers_count_name_value.autosize = $true
+            $script:headers_count_name_value.TextAlign = "MiddleLeft"
+            $script:headers_count_name_value.width                    = 150
+            $script:headers_count_name_value.height                   = 30
+            $script:headers_count_name_value.location                 = New-Object System.Drawing.Point((10 + $headers_count_name_label.width),$y_pos);
+            $script:headers_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:headers_count_name_value);
 
+
+            ################################################################################
+            ######Bullets Count Label#######################################################
             $y_pos = $y_pos + 25;
-
             $bullets_count_name_label                          = New-Object system.Windows.Forms.Label
             $bullets_count_name_label.text                     = "Bullets:";
             $bullets_count_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12317,20 +12287,25 @@ function sidekick_display
             $bullets_count_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($bullets_count_name_label);
 
+
+            ################################################################################
+            ######Bullets Count Value#######################################################
             $script:bullets_count_name_value                          = New-Object system.Windows.Forms.Label
-            $bullets_count_name_value.text                     = $script:sidekick_results.bullet_count
-            $bullets_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $bullets_count_name_value.Anchor                   = 'top,right'
-            $bullets_count_name_value.autosize = $true
-            $bullets_count_name_value.TextAlign = "MiddleLeft"
-            $bullets_count_name_value.width                    = 150
-            $bullets_count_name_value.height                   = 30
-            $bullets_count_name_value.location                 = New-Object System.Drawing.Point((10 + $bullets_count_name_label.width),$y_pos);
-            $bullets_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($bullets_count_name_value);
+            $script:bullets_count_name_value.text                     = $script:sidekick_results.bullet_count
+            $script:bullets_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:bullets_count_name_value.Anchor                   = 'top,right'
+            $script:bullets_count_name_value.autosize = $true
+            $script:bullets_count_name_value.TextAlign = "MiddleLeft"
+            $script:bullets_count_name_value.width                    = 150
+            $script:bullets_count_name_value.height                   = 30
+            $script:bullets_count_name_value.location                 = New-Object System.Drawing.Point((10 + $bullets_count_name_label.width),$y_pos);
+            $script:bullets_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:bullets_count_name_value);
 
+
+            ################################################################################
+            ######Word Count Label##########################################################
             $y_pos = $y_pos + 25;
-
             $word_count_name_label                          = New-Object system.Windows.Forms.Label
             $word_count_name_label.text                     = "Words:";
             $word_count_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12343,20 +12318,25 @@ function sidekick_display
             $word_count_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($word_count_name_label);
 
-            $script:word_count_name_value                          = New-Object system.Windows.Forms.Label
-            $word_count_name_value.text                     = $script:sidekick_results.word_count[0]
-            $word_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $word_count_name_value.Anchor                   = 'top,right'
-            $word_count_name_value.autosize = $true
-            $word_count_name_value.TextAlign = "MiddleLeft"
-            $word_count_name_value.width                    = 150
-            $word_count_name_value.height                   = 30
-            $word_count_name_value.location                 = New-Object System.Drawing.Point((10 + $word_count_name_label.width),$y_pos);
-            $word_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($word_count_name_value);
 
+            ################################################################################
+            ######Word Count Value##########################################################
+            $script:word_count_name_value                   = New-Object system.Windows.Forms.Label
+            $script:word_count_name_value.text                     = $script:sidekick_results.word_count[0]
+            $script:word_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:word_count_name_value.Anchor                   = 'top,right'
+            $script:word_count_name_value.autosize = $true
+            $script:word_count_name_value.TextAlign = "MiddleLeft"
+            $script:word_count_name_value.width                    = 150
+            $script:word_count_name_value.height                   = 30
+            $script:word_count_name_value.location                 = New-Object System.Drawing.Point((10 + $word_count_name_label.width),$y_pos);
+            $script:word_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:word_count_name_value);
+
+
+            ################################################################################
+            ######Unique Acros Label########################################################
             $y_pos = $y_pos + 25;
-
             $unique_acro_count_name_label                          = New-Object system.Windows.Forms.Label
             $unique_acro_count_name_label.text                     = "Unique Acronyms:";
             $unique_acro_count_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12369,21 +12349,56 @@ function sidekick_display
             $unique_acro_count_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($unique_acro_count_name_label);
 
+
+            ################################################################################
+            ######Unique Acros Value########################################################
             $script:unique_acro_count_name_value                   = New-Object system.Windows.Forms.Label
-            $unique_acro_count_name_value.text                     = $script:sidekick_results.acro_counter.get_count();
-            $unique_acro_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
-            $unique_acro_count_name_value.Anchor                   = 'top,right'
-            $unique_acro_count_name_value.autosize = $true
-            $unique_acro_count_name_value.TextAlign = "MiddleLeft"
-            $unique_acro_count_name_value.width                    = 150
-            $unique_acro_count_name_value.height                   = 30
-            $unique_acro_count_name_value.location                 = New-Object System.Drawing.Point((10 + $unique_acro_count_name_label.width),$y_pos);
-            $unique_acro_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
-            $left_panel.controls.Add($unique_acro_count_name_value);
+            $script:unique_acro_count_name_value.text                     = $script:sidekick_results.unique_acros.get_count();
+            $script:unique_acro_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:unique_acro_count_name_value.Anchor                   = 'top,right'
+            $script:unique_acro_count_name_value.autosize = $true
+            $script:unique_acro_count_name_value.TextAlign = "MiddleLeft"
+            $script:unique_acro_count_name_value.width                    = 150
+            $script:unique_acro_count_name_value.height                   = 30
+            $script:unique_acro_count_name_value.location                 = New-Object System.Drawing.Point((10 + $unique_acro_count_name_label.width),$y_pos);
+            $script:unique_acro_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:unique_acro_count_name_value);
 
 
+            ################################################################################
+            ######Total Acros Label#########################################################
+            $y_pos = $y_pos + 25;
+            $total_acro_count_name_label                          = New-Object system.Windows.Forms.Label
+            $total_acro_count_name_label.text                     = "Total Acronyms:";
+            $total_acro_count_name_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+            $total_acro_count_name_label.Anchor                   = 'top,right'
+            $total_acro_count_name_label.autosize = $true
+            $total_acro_count_name_label.width                    = 120
+            $total_acro_count_name_label.height                   = 30
+            $total_acro_count_name_label.TextAlign = "MiddleLeft"
+            $total_acro_count_name_label.location                 = New-Object System.Drawing.Point(5,$y_pos)
+            $total_acro_count_name_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+            $left_panel.controls.Add($total_acro_count_name_label);
+
+
+            ################################################################################
+            ######Total Acros Value#########################################################
+            $script:total_acro_count_name_value                   = New-Object system.Windows.Forms.Label
+            $script:total_acro_count_name_value.text                     = $script:sidekick_results.total_acronyms;
+            $script:total_acro_count_name_value.ForeColor                = $script:theme_settings['DIALOG_FONT_COLOR']
+            $script:total_acro_count_name_value.Anchor                   = 'top,right'
+            $script:total_acro_count_name_value.autosize = $true
+            $script:total_acro_count_name_value.TextAlign = "MiddleLeft"
+            $script:total_acro_count_name_value.width                    = 150
+            $script:total_acro_count_name_value.height                   = 30
+            $script:total_acro_count_name_value.location                 = New-Object System.Drawing.Point((10 + $total_acro_count_name_label.width),$y_pos);
+            $script:total_acro_count_name_value.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], [Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] - 1)
+            $left_panel.controls.Add($script:total_acro_count_name_value);
+
+
+            ################################################################################
+            ######Errors Info Header########################################################
             $y_pos = $y_pos + 35;
-
             $errors_info_label                          = New-Object system.Windows.Forms.Label
             $errors_info_label.text                     = "Errors";
             $errors_info_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
@@ -12396,42 +12411,45 @@ function sidekick_display
             $errors_info_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
             $left_panel.Controls.Add($errors_info_label)
 
+
+            ################################################################################
+            ######Formating Errors Label####################################################
             $y_pos = $y_pos + 25;
-            
-            $script:Formating_errors_label                          = New-Object system.Windows.Forms.Label
-            $script:Formating_errors_label.text                     = "Formating Errors:";
-            $script:Formating_errors_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
-            $script:Formating_errors_label.Anchor                   = 'top,right'
-            $script:Formating_errors_label.autosize = $true
-            $script:Formating_errors_label.width                    = 120
-            $script:Formating_errors_label.height                   = 20
-            $script:Formating_errors_label.TextAlign = "MiddleLeft"
-            $script:Formating_errors_label.location                 = New-Object System.Drawing.Point(5,$y_pos)
-            $script:Formating_errors_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
+            $formating_errors_label                          = New-Object system.Windows.Forms.Label
+            $formating_errors_label.text                     = "Formating Errors:";
+            $formating_errors_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
+            $formating_errors_label.Anchor                   = 'top,right'
+            $formating_errors_label.autosize = $true
+            $formating_errors_label.width                    = 120
+            $formating_errors_label.height                   = 20
+            $formating_errors_label.TextAlign = "MiddleLeft"
+            $formating_errors_label.location                 = New-Object System.Drawing.Point(5,$y_pos)
+            $formating_errors_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######Formating Errors Combo####################################################
             $y_pos = $y_pos + 30;
-
             $script:formating_errors_combo                   = New-Object System.Windows.Forms.ComboBox	
-            $script:Formating_errors_combo.Items.Clear();
-            $script:Formating_errors_combo.width = ($left_panel.width - 10)
-            $script:Formating_errors_combo.autosize = $false
-            $script:Formating_errors_combo.Anchor = 'top,right'
-            $script:Formating_errors_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
-            $script:Formating_errors_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
-            $script:Formating_errors_combo.DropDownStyle = "DropDownList"
-            $script:Formating_errors_combo.AccessibleName = "On";
+            $script:formating_errors_combo.Items.Clear();
+            $script:formating_errors_combo.width = ($left_panel.width - 10)
+            $script:formating_errors_combo.autosize = $false
+            $script:formating_errors_combo.Anchor = 'top,right'
+            $script:formating_errors_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
+            $script:formating_errors_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
+            $script:formating_errors_combo.DropDownStyle = "DropDownList"
+            $script:formating_errors_combo.AccessibleName = "On";
             $first = "";
-            foreach($script:Format_error in $script:sidekick_results.formating_errors.getEnumerator() | sort value)
+            foreach($format_error in $script:sidekick_results.formating_errors.getEnumerator() | sort value)
             {
                 if($first -eq "")
                 {
-                    $first = $script:Format_error.key
+                    $first = $format_error.key
                 }
-                $script:Formating_errors_combo.Items.Add($script:Format_error.key); 
+                $script:formating_errors_combo.Items.Add($format_error.key); 
             }
-            $script:Formating_errors_combo.SelectedItem = $first
-            $script:Formating_errors_combo.Add_SelectedValueChanged({
+            $script:formating_errors_combo.SelectedItem = $first
+            $script:formating_errors_combo.Add_SelectedValueChanged({
                 if($this.AccessibleName -eq "On")
                 {
                     $editor.SelectAll();
@@ -12445,9 +12463,9 @@ function sidekick_display
                     if($this.SelectedItem -match "Missing Space After `";`""){ $pattern = ";[A-Za-z0-9]"}
                     if($this.SelectedItem -match "Multiple `";`""){ $pattern = ";"; $applies = "Line"}
                     if($this.SelectedItem -match "Multiple `"--`""){ $pattern = "--"; $applies = "Line"}
-                    if($this.SelectedItem -match "Space Before `"--`""){ $pattern = " --"}
-                    if($this.SelectedItem -match "Space After `"--`""){ $pattern = "-- "} 
-                    if($this.SelectedItem -match "Extra Spaces"){ $pattern = "  "}
+                    if($this.SelectedItem -match "Space Before `"--`""){ $pattern = " --"; $applies = "Spaces"}
+                    if($this.SelectedItem -match "Space After `"--`""){ $pattern = "-- "; $applies = "Spaces"} 
+                    if($this.SelectedItem -match "Extra Spaces"){ $pattern = "  "; $applies = "Spaces"}
                     if($this.SelectedItem -match "Missing"){ $pattern = ""; $applies = "Missing"}
                     if($this.SelectedItem -match "Repeated Section|Repeated Usage|Repeated Opening|Repeated Ending"){ 
                         $section = $this.SelectedItem|%{$_.split('"')[1]}
@@ -12485,7 +12503,7 @@ function sidekick_display
                             #write-host Looking
                             $scope_start = $scope_start + $line.length + 1;
                         }
-                        if($applies -eq "Line")
+                        if(($applies -eq "Line") -or ($applies -eq "Spaces"))
                         {
                             $matches = [regex]::Matches($editor.text, $pattern)
                         }
@@ -12499,6 +12517,7 @@ function sidekick_display
                         }
                         else #Missing
                         {
+                            
                             $editor.SelectionStart = [int]$scope_start
                             $editor.SelectionLength = $found.length
                             $editor.selectionbackcolor = [System.Drawing.ColorTranslator]::FromHtml($script:theme_settings['EDITOR_HIGHLIGHT_COLOR'])
@@ -12511,20 +12530,23 @@ function sidekick_display
                     {
                         foreach($match in $matches)
                         {
+                            
                             #write-host Match Found $match.index - $scope_start - $scope_end
                             if(($match.index -ge $scope_start)  -and (($match.index + $match.value.length) -le $scope_end))
                             {
+                                $before = " ";
+                                $after = "";
                                 if($match.index -ne 0)
                                 {
                                     $before = $editor.text.substring(($match.index -1),1);
                                 }
-                                if($before -match "-|;|\s|/|\.")
+                                if(($before -match "-|;|\s|/|\.") -or ($applies -eq "Spaces"))
                                 {
                                     if(($match.index + $match.value.length + 1) -lt $editor.text.Length)
                                     {
                                         $after = $editor.text.substring(($match.index + $match.value.length),1);
                                     }
-                                    if(!($after -match "\w"))
+                                    if(!($after -match "\w")  -or ($applies -eq "Spaces"))
                                     {
                                         $editor.SelectionStart = $match.index
                                         $editor.SelectionLength = $match.value.length
@@ -12537,11 +12559,13 @@ function sidekick_display
                     }
                 }      
             })
-            $left_panel.controls.Add($script:Formating_errors_combo);
-            $left_panel.controls.Add($script:Formating_errors_label);
+            $left_panel.controls.Add($script:formating_errors_combo);
+            $left_panel.controls.Add($formating_errors_label);
 
+
+            ################################################################################
+            ######Consistency Errors Label##################################################
             $y_pos = $y_pos + 25;
-
             $consistency_errors_label                          = New-Object system.Windows.Forms.Label
             $consistency_errors_label.text                     = "Consistency Errors:";
             $consistency_errors_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12554,17 +12578,18 @@ function sidekick_display
             $consistency_errors_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######Consistency Errors Combo##################################################
             $y_pos = $y_pos + 30;
-
             $script:consistency_errors_combo = New-Object System.Windows.Forms.ComboBox	
-            $consistency_errors_combo.Items.Clear();
-            $consistency_errors_combo.width = ($left_panel.width - 10)
-            $consistency_errors_combo.autosize = $false
-            $consistency_errors_combo.Anchor = 'top,right'
-            $consistency_errors_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
-            $consistency_errors_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
-            $consistency_errors_combo.DropDownStyle = "DropDownList"
-            $consistency_errors_combo.AccessibleName = "On";
+            $script:consistency_errors_combo.Items.Clear();
+            $script:consistency_errors_combo.width = ($left_panel.width - 10)
+            $script:consistency_errors_combo.autosize = $false
+            $script:consistency_errors_combo.Anchor = 'top,right'
+            $script:consistency_errors_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
+            $script:consistency_errors_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
+            $script:consistency_errors_combo.DropDownStyle = "DropDownList"
+            $script:consistency_errors_combo.AccessibleName = "On";
             $first = "";
             foreach($consistency_error in $script:sidekick_results.consistency_errors.getEnumerator())
             {
@@ -12573,10 +12598,10 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $consistency_errors_combo.Items.Add($value); 
+                $script:consistency_errors_combo.Items.Add($value); 
             }
-            $consistency_errors_combo.SelectedItem = $first
-            $consistency_errors_combo.Add_SelectedValueChanged({
+            $script:consistency_errors_combo.SelectedItem = $first
+            $script:consistency_errors_combo.Add_SelectedValueChanged({
                 if($this.AccessibleName -eq "On")
                 {
                     $value = $this.SelectedItem -replace "Using both: ",""
@@ -12585,12 +12610,12 @@ function sidekick_display
                     $word2c = $word2.substring(0,1).toupper() + $word2.substring(1)
                     $word1l = $word1.substring(0,$word1.Length).toupper() 
                     $word2l = $word2.substring(0,$word2.Length).toupper()
+                    $culture_word1 = (Get-Culture).TextInfo.ToTitleCase($word1)
+                    $culture_word2 = (Get-Culture).TextInfo.ToTitleCase($word2)
 
-                    #write-host $word1 $word2
-
-
-                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word1c))|$([regex]::escape($word2c))|$([regex]::escape($word1l))|$([regex]::escape($word2l))"
-                    $matches = [regex]::Matches($editor.text, $pattern)
+                    $simplified_text = $editor.text -replace " | | ",' ' 
+                    $pattern = "$([regex]::escape($word1))|$([regex]::escape($word2))|$([regex]::escape($word1c))|$([regex]::escape($word2c))|$([regex]::escape($word1l))|$([regex]::escape($word2l))|$([regex]::escape($culture_word1))|$([regex]::escape($culture_word2))"
+                    $matches = [regex]::Matches($simplified_text, $pattern)
                     
                     $editor.SelectAll();
                     $editor.selectionbackcolor = $script:theme_settings['EDITOR_BACKGROUND_COLOR']
@@ -12600,7 +12625,6 @@ function sidekick_display
                     {  
                         foreach($match in $matches)
                         {
-                            #write-host $match.value
                             if(((($match.index - 1) -ge 0 ) -and (!($editor.text.Substring(($match.index - 1),1) -match "\w"))) -or (($match.index -1) -lt 0))
                             {
                                 if(((($match.index + $match.value.length + 1) -le $editor.text.length) -and (!($editor.text.Substring(($match.index + $match.value.length),1) -match "\w"))) -or (($match.index + $match.value.length) -eq $editor.text.length) -or ($editor.text.Substring(($match.index + $match.value.length - 1),1) -match '/'))
@@ -12616,11 +12640,13 @@ function sidekick_display
                 }
                      
             })
-            $left_panel.controls.Add($consistency_errors_combo);
+            $left_panel.controls.Add($script:consistency_errors_combo);
             $left_panel.controls.Add($consistency_errors_label);
 
-            $y_pos = $y_pos + 35;
 
+            ################################################################################
+            ######Analytics Header##########################################################
+            $y_pos = $y_pos + 35;
             $analytics_label                          = New-Object system.Windows.Forms.Label
             $analytics_label.text                     = "Analytics";
             $analytics_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
@@ -12633,8 +12659,10 @@ function sidekick_display
             $analytics_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] + 4))
             $left_panel.Controls.Add($analytics_label)
 
-            $y_pos = $y_pos + 25;
 
+            ################################################################################
+            ######Top Acros Label###########################################################
+            $y_pos = $y_pos + 25;
             $top_used_acros_label                          = New-Object system.Windows.Forms.Label
             $top_used_acros_label.text                     = "Top 20 Acronyms:";
             $top_used_acros_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12647,17 +12675,18 @@ function sidekick_display
             $top_used_acros_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######Top Acros Combo###########################################################
             $y_pos = $y_pos + 30;
-
             $script:top_used_acros_combo = New-Object System.Windows.Forms.ComboBox	
-            $top_used_acros_combo.Items.Clear();
-            $top_used_acros_combo.width = ($left_panel.width - 10)
-            $top_used_acros_combo.autosize = $false
-            $top_used_acros_combo.Anchor = 'top,right'
-            $top_used_acros_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
-            $top_used_acros_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
-            $top_used_acros_combo.DropDownStyle = "DropDownList"
-            $top_used_acros_combo.AccessibleName = "On";
+            $script:top_used_acros_combo.Items.Clear();
+            $script:top_used_acros_combo.width = ($left_panel.width - 10)
+            $script:top_used_acros_combo.autosize = $false
+            $script:top_used_acros_combo.Anchor = 'top,right'
+            $script:top_used_acros_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
+            $script:top_used_acros_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
+            $script:top_used_acros_combo.DropDownStyle = "DropDownList"
+            $script:top_used_acros_combo.AccessibleName = "On";
             $first = "";   
             foreach($acro in $script:sidekick_results.unique_acros.getEnumerator() | sort value -descending | Select-Object -First 20)
             {
@@ -12667,10 +12696,10 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $top_used_acros_combo.Items.Add($value); 
+                $script:top_used_acros_combo.Items.Add($value); 
             }
-            $top_used_acros_combo.SelectedItem = $first
-            $top_used_acros_combo.Add_SelectedValueChanged({
+            $script:top_used_acros_combo.SelectedItem = $first
+            $script:top_used_acros_combo.Add_SelectedValueChanged({
                 if($this.AccessibleName -eq "On")
                 {
                     $value = $this.SelectedItem -replace "Using both: ",""
@@ -12706,12 +12735,13 @@ function sidekick_display
                 }
                      
             })
-            $left_panel.controls.Add($top_used_acros_combo);
+            $left_panel.controls.Add($script:top_used_acros_combo);
             $left_panel.controls.Add($top_used_acros_label);
             
 
+            ################################################################################
+            ######Top Used Words Label######################################################
             $y_pos = $y_pos + 25;
-
             $top_used_words_label                          = New-Object system.Windows.Forms.Label
             $top_used_words_label.text                     = "Top 20 Words:";
             $top_used_words_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12724,17 +12754,18 @@ function sidekick_display
             $top_used_words_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######Top Used Words Combo######################################################
             $y_pos = $y_pos + 30;
-
             $script:top_used_words_combo = New-Object System.Windows.Forms.ComboBox	
-            $top_used_words_combo.Items.Clear();
-            $top_used_words_combo.width = ($left_panel.width - 10)
-            $top_used_words_combo.autosize = $false
-            $top_used_words_combo.Anchor = 'top,right'
-            $top_used_words_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
-            $top_used_words_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
-            $top_used_words_combo.DropDownStyle = "DropDownList"
-            $top_used_words_combo.AccessibleName = "On";
+            $script:top_used_words_combo.Items.Clear();
+            $script:top_used_words_combo.width = ($left_panel.width - 10)
+            $script:top_used_words_combo.autosize = $false
+            $script:top_used_words_combo.Anchor = 'top,right'
+            $script:top_used_words_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
+            $script:top_used_words_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
+            $script:top_used_words_combo.DropDownStyle = "DropDownList"
+            $script:top_used_words_combo.AccessibleName = "On";
             $first = "";
             foreach($word in $script:sidekick_results.word_counter.getEnumerator() | sort value -descending | Select-Object -First 20)
             {
@@ -12743,10 +12774,10 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $top_used_words_combo.Items.Add($value); 
+                $script:top_used_words_combo.Items.Add($value); 
             }
-            $top_used_words_combo.SelectedItem = $first
-            $top_used_words_combo.Add_SelectedValueChanged({
+            $script:top_used_words_combo.SelectedItem = $first
+            $script:top_used_words_combo.Add_SelectedValueChanged({
                 if($this.AccessibleName -eq "On")
                 {
                     $value = $this.SelectedItem -replace "Using both: ",""
@@ -12783,11 +12814,13 @@ function sidekick_display
                     }
                 }        
             })
-            $left_panel.controls.Add($top_used_words_combo);
+            $left_panel.controls.Add($script:top_used_words_combo);
             $left_panel.controls.Add($top_used_words_label);
 
-            $y_pos = $y_pos + 25;
 
+            ################################################################################
+            ######Metrics Used Label########################################################
+            $y_pos = $y_pos + 25;
             $metrics_used_label                          = New-Object system.Windows.Forms.Label
             $metrics_used_label.text                     = "Metrics Used:";
             $metrics_used_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12800,17 +12833,18 @@ function sidekick_display
             $metrics_used_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             
 
+            ################################################################################
+            ######Metrics Used Combo########################################################
             $y_pos = $y_pos + 30;
-
             $script:metrics_used_combo = New-Object System.Windows.Forms.ComboBox	
-            $metrics_used_combo.Items.Clear();
-            $metrics_used_combo.width = ($left_panel.width - 10)
-            $metrics_used_combo.autosize = $false
-            $metrics_used_combo.Anchor = 'top,right'
-            $metrics_used_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
-            $metrics_used_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
-            $metrics_used_combo.DropDownStyle = "DropDownList"
-            $metrics_used_combo.AccessibleName = "On";
+            $script:metrics_used_combo.Items.Clear();
+            $script:metrics_used_combo.width = ($left_panel.width - 10)
+            $script:metrics_used_combo.autosize = $false
+            $script:metrics_used_combo.Anchor = 'top,right'
+            $script:metrics_used_combo.Location = New-Object System.Drawing.Point(5,$y_pos)
+            $script:metrics_used_combo.font = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE']))
+            $script:metrics_used_combo.DropDownStyle = "DropDownList"
+            $script:metrics_used_combo.AccessibleName = "On";
             $first = "";
             foreach($metric in $script:sidekick_results.metrics.getEnumerator() | sort value)
             {
@@ -12820,10 +12854,10 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $metrics_used_combo.Items.Add($value); 
+                $script:metrics_used_combo.Items.Add($value); 
             }
-            $metrics_used_combo.SelectedItem = $first
-            $metrics_used_combo.Add_SelectedValueChanged({
+            $script:metrics_used_combo.SelectedItem = $first
+            $script:metrics_used_combo.Add_SelectedValueChanged({
                 if($this.AccessibleName -eq "On")
                 {
                     ($metric,$location) = $this.SelectedItem -split "::"
@@ -12844,11 +12878,12 @@ function sidekick_display
                 }
                      
             })
-            $left_panel.controls.Add($metrics_used_combo);
+            $left_panel.controls.Add($script:metrics_used_combo);
             $left_panel.controls.Add($metrics_used_label);
 
+            ################################################################################
+            ######Tools Header##############################################################
             $y_pos = $y_pos + 45;
-
             $tools_label                          = New-Object system.Windows.Forms.Label
             $tools_label.text                     = "Tools";
             $tools_label.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
@@ -12862,8 +12897,9 @@ function sidekick_display
             $left_panel.Controls.Add($tools_label)
 
 
+            ################################################################################
+            ######EPR Acros Button##########################################################
             $y_pos = $y_pos + 35;
-
             $gen_epr_acros_button           = New-Object System.Windows.Forms.Button
             $gen_epr_acros_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
             $gen_epr_acros_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
@@ -12878,8 +12914,10 @@ function sidekick_display
             })
             $left_panel.controls.Add($gen_epr_acros_button)
 
-            $y_pos = $y_pos + 30;
 
+            ################################################################################
+            ######Award Acros Button########################################################
+            $y_pos = $y_pos + 30;
             $gen_1206_acros_button           = New-Object System.Windows.Forms.Button
             $gen_1206_acros_button.BackColor = $script:theme_settings['DIALOG_BUTTON_BACKGROUND_COLOR']
             $gen_1206_acros_button.ForeColor = $script:theme_settings['DIALOG_BUTTON_TEXT_COLOR']
@@ -12894,8 +12932,10 @@ function sidekick_display
             })
             $left_panel.controls.Add($gen_1206_acros_button)
 
-            $y_pos = $y_pos + 30;
 
+            ################################################################################
+            ######Find Words Input##########################################################
+            $y_pos = $y_pos + 30;
             $find_input                   = New-Object system.Windows.Forms.TextBox                       
             $find_input.AutoSize                 = $true
             $find_input.ForeColor                = $script:theme_settings['DIALOG_INPUT_TEXT_COLOR']
@@ -12944,8 +12984,10 @@ function sidekick_display
             })
             $left_panel.controls.Add($find_input);
 
-            $y_pos = $y_pos + 45;
 
+            ################################################################################
+            ######Compression Label#########################################################
+            $y_pos = $y_pos + 45;
             $compression_label                          = New-Object system.Windows.Forms.Label
             $compression_label.text                     = "Text Compression";
             $compression_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
@@ -12959,8 +13001,10 @@ function sidekick_display
             $compression_label.Font                     = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $left_panel.controls.Add($compression_label);
 
-            $y_pos = $y_pos + 30;
 
+            ################################################################################
+            ######Compression Trackbar######################################################
+            $y_pos = $y_pos + 30;
             $script:compression_trackbar_label = New-Object System.Windows.Forms.Label
             $compression_trackbar = New-Object System.Windows.Forms.TrackBar
             $compression_trackbar.Width = 200
@@ -12977,7 +13021,7 @@ function sidekick_display
                 {
                     $script:space_hash.Clear();
                     $this.AccessibleName = "Off"
-                    $compression_trackbar_label.Text = $this.AccessibleName
+                    $script:compression_trackbar_label.Text = $this.AccessibleName
                     $script:space_hash.Clear();
                     $script:bullets_compressed = new-object System.Collections.Hashtable
                 }
@@ -12986,14 +13030,14 @@ function sidekick_display
                     $script:space_hash.Clear();
                     $script:bullets_compressed = new-object System.Collections.Hashtable
                     $this.AccessibleName = "Reset"
-                    $compression_trackbar_label.Text = $this.AccessibleName
+                    $script:compression_trackbar_label.Text = $this.AccessibleName
                     $script:space_hash.Clear();
                     #$script:space_hash.add(" ",14.2159411269359)
                 }
                 elseif($this.value -eq 3)
                 {
                     $this.AccessibleName = "Low"
-                    $compression_trackbar_label.Text = $this.AccessibleName
+                    $script:compression_trackbar_label.Text = $this.AccessibleName
                     $script:space_hash.Clear();
                     $script:bullets_compressed = new-object System.Collections.Hashtable
                     #$script:space_hash.add(" ",14.2159411269359)
@@ -13002,7 +13046,7 @@ function sidekick_display
                 elseif($this.value -eq 4)
                 {
                     $this.AccessibleName = "Medium"
-                    $compression_trackbar_label.Text = $this.AccessibleName
+                    $script:compression_trackbar_label.Text = $this.AccessibleName
                     $script:space_hash.Clear();
                     $script:bullets_compressed = new-object System.Collections.Hashtable
                     #$script:space_hash.add(" ",14.2159411269359)
@@ -13012,7 +13056,7 @@ function sidekick_display
                 elseif($this.value -eq 5)
                 {
                     $this.AccessibleName = "High"
-                    $compression_trackbar_label.Text = $this.AccessibleName
+                    $script:compression_trackbar_label.Text = $this.AccessibleName
                     $script:space_hash.Clear();
                     $script:bullets_compressed = new-object System.Collections.Hashtable
                     #$script:space_hash.add(" ",14.2159411269359)
@@ -13026,12 +13070,12 @@ function sidekick_display
             $compression_trackbar.Value = $script:settings['TEXT_COMPRESSION']
             
 
-            $y_pos = $y_pos + 35;
-
-            
+            ################################################################################
+            ######Compression Trackbar Label################################################
+            $y_pos = $y_pos + 35;   
             $script:compression_trackbar_label.Font   = [Drawing.Font]::New($script:theme_settings['INTERFACE_FONT'], ([Decimal]$script:theme_settings['INTERFACE_FONT_SIZE'] ))
             $script:compression_trackbar_label.width = 200
-            $script:compression_trackbar_label.Location = New-Object System.Drawing.Point((($left_panel.width / 2) - ($compression_trackbar_label.Width / 2)),$y_pos)
+            $script:compression_trackbar_label.Location = New-Object System.Drawing.Point((($left_panel.width / 2) - ($script:compression_trackbar_label.Width / 2)),$y_pos)
             $script:compression_trackbar_label.ForeColor                = $script:theme_settings['DIALOG_SUB_HEADER_COLOR']
             #$script:compression_trackbar_label.BackColor = "Green"
             $script:compression_trackbar_label.TextAlign = "MiddleCenter"
@@ -13042,42 +13086,44 @@ function sidekick_display
 
         } 
 
-        ################################################################################
-        ######Sidekick Refresh Information##############################################
-        if(($script:sidekick_results -ne "") -and ($script:sidekickgui -eq "Update Values"))
+###############################################################################################################################################################
+######Sidekick Refresh Information#############################################################################################################################
+        if((Test-Path variable:script:left_panel) -and (Test-Path variable:script:sidekick_results) -and ($script:sidekickgui -eq "Update Values"))
         {
-            ##Update Values instead of rebuilding
-            #$location_value.text                     = $script:current_line
-            $package_name_value.text                 = $script:settings['PACKAGE']
-            $bullets_loaded_name_value.text          = $Script:bullet_bank.Get_Count()
-            $acronyms_loaded_name_value.text         = $script:acronym_list.Get_Count()
-            $headers_count_name_value.text           = $script:sidekick_results.header_count
-            $bullets_count_name_value.text           = $script:sidekick_results.bullet_count
-            $word_count_name_value.text              = $script:sidekick_results.word_count
-            $unique_acro_count_name_value.text       = $script:sidekick_results.acro_counter.get_count();
+            ################################################################################
+            ######Update Sidekick Vars (No Rebuild)#########################################
+            $script:location_value.text                     = $script:current_line
+            $script:package_name_value.text                 = $script:settings['PACKAGE']
+            $script:bullets_loaded_name_value.text          = $Script:bullet_bank.Get_Count()
+            $script:acronyms_loaded_name_value.text         = $script:acronym_list.Get_Count()
+            $script:headers_count_name_value.text           = $script:sidekick_results.header_count
+            $script:bullets_count_name_value.text           = $script:sidekick_results.bullet_count
+            $script:word_count_name_value.text              = $script:sidekick_results.word_count
+            $script:unique_acro_count_name_value.text       = $script:sidekick_results.unique_acros.get_count();
+            $script:total_acro_count_name_value.text        = $script:sidekick_results.total_acronyms;
 
 
-            #############################
-            $script:Formating_errors_combo.AccessibleName = "Off";
-            $consistency_errors_combo.AccessibleName = "Off";
-            $top_used_acros_combo.AccessibleName = "Off";
-            $top_used_words_combo.AccessibleName = "Off";
-            $metrics_used_combo.AccessibleName = "Off";
-
-            #############################
-            $script:Formating_errors_combo.Items.Clear();
+            ################################################################################
+            ######Update Sidekick Formating Errors Combo (No Rebuild)#######################
+            $script:formating_errors_combo.AccessibleName = "Off";
+            $script:formating_errors_combo.Items.Clear();
             $first = "";
-            foreach($script:Format_error in $script:sidekick_results.formating_errors.getEnumerator() | sort value)
+            foreach($format_error in $script:sidekick_results.formating_errors.getEnumerator() | sort value)
             {
                 if($first -eq "")
                 {
-                    $first = $script:Format_error.key
+                    $first = $format_error.key
                 }
-                $script:Formating_errors_combo.Items.Add($script:Format_error.key); 
+                $script:formating_errors_combo.Items.Add($format_error.key); 
             }
-            $script:Formating_errors_combo.SelectedItem = $first
-            ##############################
-            $consistency_errors_combo.Items.Clear();
+            $script:formating_errors_combo.SelectedItem = $first
+            $script:formating_errors_combo.AccessibleName = "On";
+
+
+            ################################################################################
+            ######Update Sidekick Consistency Errors Combo (No Rebuild)#####################
+            $script:consistency_errors_combo.AccessibleName = "Off";
+            $script:consistency_errors_combo.Items.Clear();
             $first = "";
             foreach($consistency_error in $script:sidekick_results.consistency_errors.getEnumerator())
             {
@@ -13086,12 +13132,15 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $consistency_errors_combo.Items.Add($value); 
+                $script:consistency_errors_combo.Items.Add($value); 
             }
-            $consistency_errors_combo.SelectedItem = $first
+            $script:consistency_errors_combo.SelectedItem = $first
+            $script:consistency_errors_combo.AccessibleName = "On";
 
-            ##############################
-            $top_used_acros_combo.Items.Clear();
+            ################################################################################
+            ######Update Sidekick Top Acros Combo (No Rebuild)##############################
+            $script:top_used_acros_combo.AccessibleName = "Off";
+            $script:top_used_acros_combo.Items.Clear();
             $first = "";   
             foreach($acro in $script:sidekick_results.unique_acros.getEnumerator() | sort value -descending | Select-Object -First 20)
             {
@@ -13101,11 +13150,16 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $top_used_acros_combo.Items.Add($value); 
+                $script:top_used_acros_combo.Items.Add($value); 
             }
-            $top_used_acros_combo.SelectedItem = $first
-            ##################################
-            $top_used_words_combo.Items.Clear();
+            $script:top_used_acros_combo.SelectedItem = $first
+            $script:top_used_acros_combo.AccessibleName = "On";
+
+
+            ################################################################################
+            ######Update Sidekick Top Used Words Combo (No Rebuild)#########################
+            $script:top_used_words_combo.AccessibleName = "Off";
+            $script:top_used_words_combo.Items.Clear();
             $first = "";
             foreach($word in $script:sidekick_results.word_counter.getEnumerator() | sort value -descending | Select-Object -First 10)
             {
@@ -13114,11 +13168,16 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $top_used_words_combo.Items.Add($value); 
+                $script:top_used_words_combo.Items.Add($value); 
             }
-            $top_used_words_combo.SelectedItem = $first
-            ####################################
-            $metrics_used_combo.Items.Clear();
+            $script:top_used_words_combo.SelectedItem = $first
+            $script:top_used_words_combo.AccessibleName = "On";
+
+
+            ################################################################################
+            ######Update Sidekick Metrics Used Combo (No Rebuild)###########################
+            $script:metrics_used_combo.AccessibleName = "Off";
+            $script:metrics_used_combo.Items.Clear();
             $first = "";
             foreach($metric in $script:sidekick_results.metrics.getEnumerator() | sort value)
             {
@@ -13128,22 +13187,20 @@ function sidekick_display
                 {
                     $first = $value
                 }
-                $metrics_used_combo.Items.Add($value); 
+                $script:metrics_used_combo.Items.Add($value); 
             }
-            $metrics_used_combo.SelectedItem = $first
-            #############################
-            $script:Formating_errors_combo.AccessibleName = "On";
-            $consistency_errors_combo.AccessibleName = "On";
-            $top_used_acros_combo.AccessibleName = "On";
-            $top_used_words_combo.AccessibleName = "On";
-            $metrics_used_combo.AccessibleName = "On";
-        }
+            $script:metrics_used_combo.SelectedItem = $first
+            $script:metrics_used_combo.AccessibleName = "On";
+              
 
+            ################################################################################
+            ################################################################################
+        }#Sidekick Panel Refresh
     }#Sidekick Panel Width
     else
     {
         $left_panel.Controls.Clear();
-        #write-host Destroy
+        log "Destroyed Sidekick"
     }
 }
 ################################################################################
@@ -13732,7 +13789,7 @@ function var_sizes
                         {
                             #write-host K-----
                             #write-host $key - $size - $key.Length
-                            $size = $size + $key.Length
+                            $size = $size + ($key.tostring()).Length
                             #write-host $key - $size - $key.Length
                     
                         }
@@ -13740,7 +13797,7 @@ function var_sizes
                         {
                             #write-host V-----
                             #write-host $value - $size - $value.Length
-                            $size = $size + $value.Length
+                            $size = $size + ($value.tostring()).Length
                             #write-host $value - $size - $value.Length
                     
                         }
@@ -13758,26 +13815,37 @@ function var_sizes
                 }
                 elseif($type -match "Array")
                 {
-                    #write-host ------------------$type $var.name
+                    #write-host ------------------$type $var.name #$var.value
                     $size = 0;
                     foreach($item in $var.value)
                     {
-                        foreach($part in $item.value)
+                        if(Test-path variable:item)
                         {
-                            #write-host -------------
-                            #write-host $part.values
-                            foreach($seg in $part.keys)
+                            foreach($part in $item)
                             {
-                                #write-host $seg
-                                $size = $size + $seg.Length
-                            }
-                            foreach($seg in $part.values)
-                            {
-                                #write-host $seg
-                                $size = $size + $seg.Length
+                                if($part -ne "")
+                                {
+                                    foreach($seg in $part)
+                                    {
+                                        if((Test-path variable:seg) -and ($seg -ne $null) -and ($seg.psobject.properties['name']))
+                                        {
+                                            #write-host $seg.name
+                                            $size = $size + (($seg.name).ToString()).Length
+                                        }
+                                    }
+                                    if((Test-path variable:seg) -and ($seg -ne $null) -and ($seg.psobject.properties['value']))
+                                    {
+                                        foreach($seg in $part.value)
+                                        {
+                                        
+                                                #write-host $seg
+                                                $size = $size + (($seg).ToString()).Length
+                                            
+                                        }
+                                    }
+                                }
                             }
                         }
-                
                     }
                     $var_sizes["Array  - $name"] = $size
                 }
@@ -13793,8 +13861,8 @@ function var_sizes
                 elseif($type -match "^int|^double|^float|^long")
                 {
                     #write-host ----------------$type
-                    $size = (($var.name).tostring.Length) + (($var.value).tostring.length)
-                    #write-host $var.name $var.value
+                    $size = ($var.name.Length) + ($var.value.tostring()).length
+                    #write-host $size = $var.name $var.value
                     $var_sizes["Int    - $name"] = $size
                 }
                 else
@@ -13827,7 +13895,7 @@ function var_sizes
         {
             #write-host $var.key = $var.value
         }
-        write-host ---------------------VarList Start
+        write-host ---------------------VarList End
     }
 }
 ################################################################################
@@ -14061,6 +14129,17 @@ function about_dialog
     $version_box.AccessibleName = "";
     $version_box.text = "
     --------------------------------------------------------------------
+    Version 1.4:
+    --------------------------------------------------------------------
+    Date: 4 Dec 2021
+    Performance: Eliminated Invisible ENV errors, causing memory leaks
+    Performance: Re-arranged Script Scope variables 
+    New Feature: Show total used Acronyms
+    Bug Fixed: Unique Acronyms count incorrect
+    Bug Fixed: Duplicate word detection more accurate
+    Bug Fixed: Extra space detection now visible
+
+    --------------------------------------------------------------------
     Version 1.3:
     --------------------------------------------------------------------
     Date: 2 Dec 2021
@@ -14130,7 +14209,10 @@ function about_dialog
 }
 ################################################################################
 ######Main Sequence Start#######################################################
+
+##########Setup Pre-Vars
 var_sizes
+##Interface Vars
 $script:Form                                           = New-Object system.Windows.Forms.Form
 $script:editor                                         = New-Object CustomRichTextBox
 $script:ghost_editor                                   = New-Object CustomRichTextBox
@@ -14141,6 +14223,9 @@ $script:sizer_box                                      = New-Object System.Windo
 $script:sizer_art                                      = new-object system.windows.forms.label
 $script:sidekick_panel                                 = New-Object system.Windows.Forms.Panel
 $script:left_panel                                     = New-Object system.Windows.Forms.Panel
+$script:main_vars = Get-Variable | Select-Object -ExpandProperty Name   #Contains List of Startup Variables
+
+#########Run Sequence
 Log "Initial Checks Start"
 initial_checks;
 Log "Initial Checks End"
@@ -14163,5 +14248,3 @@ Log "Loading Dictionary End"
 Log "BLANK"
 Log "Main Start"
 main;
-
-
