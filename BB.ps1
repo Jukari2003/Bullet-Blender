@@ -36,7 +36,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.4 (Beta - 4 Dec 2021)"
+$script:program_version = "1.4.1 (Beta - 5 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
@@ -14131,6 +14131,12 @@ function about_dialog
     $version_box.ScrollBars = "Vertical"
     $version_box.AccessibleName = "";
     $version_box.text = "
+    --------------------------------------------------------------------
+    Version 1.4.1:
+    --------------------------------------------------------------------
+    Date: 5 Dec 2021
+    Bug Fixed: Fixed Embedded Acronyms Causing Incorrect Unique Acro Display
+
     --------------------------------------------------------------------
     Version 1.4:
     --------------------------------------------------------------------
