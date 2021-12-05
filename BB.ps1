@@ -11643,18 +11643,22 @@ function update_sidekick
                 ##Check Acronyms
                 foreach($acro in $acros_found.getEnumerator() | sort key)
                 {
-                    ($mode,$index,$acronym,$meaning) = $acro.key -split "::"
+                    ($mode,[int]$index,$acronym,$meaning) = $acro.key -split "::"
                 
                     ###########################################################################
                     ##Check to see if this is an acro within an acro
                     $acro_within_acro = 0;
-                    if(($index -ne 0) -and ($index + $acronym.Length -le $editor_text.Length))
-                    {
-                        if(!(($editor_text).Substring(($index - 1),1) -match '[^A-Za-z0-9]'))
+                    if(($index -ne 0) -and (($index + $acronym.Length) -lt $editor_text.Length))
+                    {    
+                        if((!(($editor_text).Substring(($index - 1),1) -match "[A-Z]"))) #Check Front
                         {
-                            $acro_within_acro = 1;
-                        }
+                            if(($editor_text).Substring(($index + $acronym.Length),1) -match "[A-Z]") #Check Back
+                            {
+                                $acro_within_acro = 1;
+                            }
+                        }           
                     }
+                    
                     ###########################################################################
                     ##Check consistency
                     $found = 0;
@@ -11699,7 +11703,7 @@ function update_sidekick
                                 if((!($acro_list.contains($meaning))) -and ($acro_within_acro -ne 1))
                                 {
                                     #write-host $acro_within_acro = $acronym = $meaning
-                                    $acro_list.Add($meaning,$acronym);      
+                                    $acro_list.Add($meaning,$acronym);
                                 }
                             }
 
@@ -11725,8 +11729,8 @@ function update_sidekick
                         if((!($unique_acros.Contains($acronym))))
                         {
                             $unique_acros.add($acronym,$acro.value)
-                            
-                            $total_acronyms = $total_acronyms + $acro.value
+                            $total_acronyms = $total_acronyms + $acro.value  
+                            #
                         }
                     }
                 }
@@ -11811,8 +11815,7 @@ function update_sidekick
                                 if($after)
                                 {
                                     break;
-                                }
-                            
+                                } 
                             }
                         }
                         if($value)
