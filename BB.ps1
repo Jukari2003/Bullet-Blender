@@ -17,6 +17,7 @@ Set-Location $dir
 Add-Type -AssemblyName 'System.Windows.Forms'
 Add-Type -AssemblyName 'System.Drawing'
 Add-Type -AssemblyName 'PresentationFramework'
+Add-Type -AssemblyName 'System.Security'
 [System.Windows.Forms.Application]::EnableVisualStyles();
 
 ################################################################################
@@ -36,7 +37,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.4.1 (Beta - 5 Dec 2021)"
+$script:program_version = "1.5 (Beta - 11 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
@@ -88,7 +89,8 @@ $script:thesaurus_menu = "";               #Hand-off menu to functions
 ##Word Hippo
 $script:global_word_hippo =                #Hand-off for Word Hippo
 $script:word_hippo_job = ""                #Tracks Job for Word Hippo lookups
-$script:word_hippo_menu = "";               #Hand-off menu to functions
+$script:word_hippo_menu = "";              #Hand-off menu to functions
+$script:certificate = "";                  #Loads Certificate for CBII 
 
 ##Bullet Vars
 $Script:bullet_banks = @{};                #Tracks Bullet Bank Lists Enabled/Disabled Status
@@ -1614,6 +1616,7 @@ function update_feeder
                     $feeder_box.ZoomFactor = $script:zoom
                 }  
             }
+            Remove-Job -job $script:feeder_job
             $script:feeder_job = "";
         }
     }
@@ -3669,7 +3672,7 @@ function thesaurus_lookup($lookup_word)
         if($script:thesaurus_job.state -eq "Completed")
         {
             $script:global_thesaurus = Receive-Job -Job $script:thesaurus_job
-            if(($script:thesaurus_job.state -eq "Completed") -and ($script:global_thesaurus.Get_Count() -ne 0))
+            if(($script:global_thesaurus -ne $null) -and ($script:thesaurus_job.state -eq "Completed") -and ($script:global_thesaurus.Get_Count() -ne 0))
             {   
                 ([int]$index_start,$word) = $thesaurus_menu.name -split "::"
                 #write-host Thesuarus $index_start - $word
@@ -3697,7 +3700,8 @@ function thesaurus_lookup($lookup_word)
                     {
                         break;
                     } 
-                }          
+                }
+                Remove-Job -job $script:thesaurus_job          
                 $script:thesaurus_job = "";
 
             }
@@ -3722,6 +3726,7 @@ function thesaurus_lookup($lookup_word)
                 $thesaurus_menu.DropDownItems.Add($thesaurus_sub_menu)
                 $thesaurus_menu.DropDownItems.remove($thesaurus_sub_menu)
 
+                Remove-Job -job $script:thesaurus_job
                 $script:thesaurus_job = "";
             }
         }
@@ -3737,15 +3742,33 @@ function word_hippo_lookup($lookup_word)
         #########################################################
         ###Start Job
         $script:word_hippo_job = Start-Job -ScriptBlock {
-
+            Add-Type -AssemblyName System.Security
             $word = $using:lookup_word
+            $cert = $using:certificate
             $word_list = New-Object system.collections.hashtable
             $word = $word.ToLower();
             $full_url = "https://www.wordhippo.com/what-is/another-word-for/$word.html"
-
+            #load_certificate
+            #write-host Cert $cert
             try
             {
-                $response = Invoke-WebRequest -Uri $full_url
+                #############################CBII Support (Ver 1.5)
+                if(($cert -ne "") -or ($cert -ne $null))
+                {
+                    #write-host "CBII Request"
+                    $WebRequestParams = @{
+    
+                        Uri = $full_url       # Uri to file to download
+                        OutFile = $Path       # Path to where file should be downloaded (include filename)
+                        Certificate = $cert
+                    }
+                    $response = Invoke-WebRequest @WebRequestParams
+                }
+                else
+                {
+                    #write-Host "Standard Request"
+                    $response = Invoke-WebRequest -Uri $full_url
+                }
                 $response = $response -split "`n"
                 $found = 0;
                 foreach($line in $response)
@@ -3786,10 +3809,8 @@ function word_hippo_lookup($lookup_word)
         ###Job Finished
         if($script:word_hippo_job.state -eq "Completed")
         {
-
-
             $script:global_word_hippo = Receive-Job -Job $script:word_hippo_job
-            if(($script:word_hippo_job.state -eq "Completed") -and ($script:global_word_hippo.Get_Count() -ne 0))
+            if(($script:global_word_hippo -ne $null) -and ($script:word_hippo_job.state -eq "Completed") -and ($script:global_word_hippo.Get_Count() -ne 0))
             {   
                 
                 ([int]$index_start,$word) = $word_hippo_menu.name -split "::"
@@ -3818,7 +3839,8 @@ function word_hippo_lookup($lookup_word)
                     {
                         break;
                     } 
-                }          
+                }
+                Remove-Job -job $script:word_hippo_job          
                 $script:word_hippo_job = "";
 
             }
@@ -3843,9 +3865,26 @@ function word_hippo_lookup($lookup_word)
                 $word_hippo_menu.DropDownItems.Add($word_hippo_sub_menu)
                 $word_hippo_menu.DropDownItems.remove($word_hippo_sub_menu)
 
+                Remove-Job -job $script:word_hippo_job
                 $script:word_hippo_job = "";
             }
         }
+    }
+}
+################################################################################
+######Load CBII Certificate#####################################################
+function load_certificate
+{
+    if($script:certificate -eq "")
+    {
+        $ValidCerts = [System.Security.Cryptography.X509Certificates.X509Certificate2[]](dir Cert:\CurrentUser\My | where { (($_.Subject -match "\d{10}") -and ($_.Issuer -match "CA-52") -and ($_.Issuer -match "IDD"))})
+        $script:certificate = ($ValidCerts | Select -First 1); #Auto Assign Certificate
+        #$script:certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2UI]::SelectFromCollection(
+        #    $ValidCerts,
+        #    'Choose a certificate',
+        #    'Choose a certificate',
+        #    'SingleSelection'
+        #) | select -First 1
     }
 }
 ################################################################################
@@ -6781,6 +6820,7 @@ function save_history
         {
             #write-host "Job Finished"
             $script:save_history_tracker = Receive-Job -Job $script:save_history_job
+            Remove-Job -job $script:save_history_job
             $script:save_history_job = "";
             #######################################################Scrub History in Memory (Ver 1.3 Update)
             
@@ -12064,6 +12104,7 @@ function update_sidekick
                     $script:sidekickgui = "Update Values"
                 }
                 sidekick_display
+                Remove-Job -job $script:sidekick_job
                 $script:sidekick_job = "";
             }
         }
@@ -13604,7 +13645,7 @@ function system_settings_dialog
         }
         else
         {
-            $memory_flushing_trackbar_label.text = "Memory Flushing & Garbage Collect"
+            $memory_flushing_trackbar_label.text = "Memory Flushing && Garbage Collect"
         }
     })
     $memory_flushing_trackbar.Value = $script:settings['MEMORY_FLUSHING']
@@ -13621,7 +13662,6 @@ function system_settings_dialog
     $memory_flushing_trackbar_label.TextAlign = "MiddleLeft"
     $system_settings_form.Controls.Add($memory_flushing_trackbar_label)
     $system_settings_form.controls.Add($memory_flushing_trackbar)
-
 
 
     ################################################################################
@@ -14132,6 +14172,12 @@ function about_dialog
     $version_box.AccessibleName = "";
     $version_box.text = "
     --------------------------------------------------------------------
+    Version 1.5:
+    --------------------------------------------------------------------
+    Date: 11 Dec 2021
+    Bug Fixed: Added support for Cloud Based Internet Isolation (CBII) (Beta)
+
+    --------------------------------------------------------------------
     Version 1.4.1:
     --------------------------------------------------------------------
     Date: 5 Dec 2021
@@ -14256,4 +14302,5 @@ load_dictionary;
 Log "Loading Dictionary End"
 Log "BLANK"
 Log "Main Start"
+load_certificate
 main;
