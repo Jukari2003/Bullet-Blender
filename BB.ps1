@@ -3705,7 +3705,7 @@ function thesaurus_lookup($lookup_word)
                 $script:thesaurus_job = "";
 
             }
-            elseif(($status -eq "Completed") -and ($script:global_thesaurus.Get_Count() -eq 0))
+            elseif(($script:global_thesaurus -ne $null) -and ($script:thesaurus_job.state -eq "Completed") -and ($script:global_thesaurus.Get_Count() -eq 0))
             {
 
                 $thesaurus_menu.DropDownItems.clear();
@@ -3725,7 +3725,6 @@ function thesaurus_lookup($lookup_word)
                 $thesaurus_sub_menu.enabled = $false
                 $thesaurus_menu.DropDownItems.Add($thesaurus_sub_menu)
                 $thesaurus_menu.DropDownItems.remove($thesaurus_sub_menu)
-
                 Remove-Job -job $script:thesaurus_job
                 $script:thesaurus_job = "";
             }
@@ -3844,7 +3843,7 @@ function word_hippo_lookup($lookup_word)
                 $script:word_hippo_job = "";
 
             }
-            elseif(($status -eq "Completed") -and ($script:global_word_hippo.Get_Count() -eq 0))
+            elseif(($script:global_word_hippo -ne $null) -and ($script:word_hippo_job.state -eq "Completed") -and ($script:global_word_hippo.Get_Count() -eq 0))
             {
 
                 $word_hippo_menu.DropDownItems.clear();
@@ -14176,6 +14175,7 @@ function about_dialog
     --------------------------------------------------------------------
     Date: 11 Dec 2021
     Bug Fixed: Added support for Cloud Based Internet Isolation (CBII) (Beta)
+    Bug Fixed: No synonyms in thesaurus would cause thesaurus job to loop forever
 
     --------------------------------------------------------------------
     Version 1.4.1:
