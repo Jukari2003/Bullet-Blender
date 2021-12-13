@@ -37,10 +37,14 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.5 (Beta - 11 Dec 2021)"
+$script:program_version = "1.5.1 (Beta - 13 Dec 2021)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
-$script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile){Remove-Item -literalpath $script:logfile}
+$script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile)
+{
+    #Remove-Item -literalpath $script:logfile
+    delete_folder_or_file $script:logfile
+}
 $script:log_mem_change = $script:memBefore #Logs Difference In time
 $script:print_to_console = 0;              #Turns on Console Log           1=On 0=Off
 $script:print_to_log = 0;                  #Turns on File Log              1=On 0=Off
@@ -554,7 +558,8 @@ function build_file_menu
             {
                 if(test-path -literalpath "$dir\Resources\Packages\Current")
                 {
-                    Remove-Item -literalpath "$dir\Resources\Packages\Current" -recurse -Force
+                    #Remove-Item -literalpath "$dir\Resources\Packages\Current" -recurse -Force
+                    delete_folder_or_file "$dir\Resources\Packages\Current"
                 }
                 $script:settings['PACKAGE'] = "Current"
                 load_package
@@ -568,7 +573,8 @@ function build_file_menu
         {
             if(test-path -literalpath "$dir\Resources\Packages\Current")
             {
-                Remove-Item -literalpath "$dir\Resources\Packages\Current" -recurse -Force
+                #Remove-Item -literalpath "$dir\Resources\Packages\Current" -recurse -Force
+                delete_folder_or_file "$dir\Resources\Packages\Current"
             }
             $script:settings['PACKAGE'] = "Current"
             load_package
@@ -615,6 +621,41 @@ function build_file_menu
         $MenuBar.Refresh();
         manage_package_dialog
     })
+}
+################################################################################
+#####Delete Folder or File######################################################
+function delete_folder_or_file($target)
+{
+    #write-host $target
+    if(Test-Path -LiteralPath $target)
+    {
+        if((Get-Item -literalpath $target) -is [System.IO.DirectoryInfo])
+        {
+            #write-host Deleting Folder
+            $Items = Get-ChildItem -LiteralPath "$target" -Recurse
+            foreach ($Item in $Items) 
+            {
+                $Item.Delete()
+            }
+            $Items = Get-Item -LiteralPath "$target"
+            $Items.Delete($true)
+        }
+        else
+        {
+            #write-host Deleting File
+            $Item = Get-Item -LiteralPath "$target"
+            $Item.Delete()
+        }
+    } 
+    #if(Test-path "$target")
+    #{
+    #    write-host Test Failed
+    #}
+    #else
+    #{
+    #    write-host Test Passed
+    #}
+
 }
 ################################################################################
 #####Build Edit Menu############################################################
@@ -1035,7 +1076,8 @@ function manage_bullets_dialog
                 {
                     if(Test-path -LiteralPath $this.name)
                     {
-                        Remove-Item -LiteralPath $this.name
+                        #Remove-Item -LiteralPath $this.name
+                        delete_folder_or_file $this.name
                     }
                     $script:Bullet_banks.remove("$file.txt");
                     build_bullet_menu
@@ -1339,7 +1381,8 @@ function import_bullet_processing($input_file,$output_file)
     $reader.Close();
     if(Test-Path -LiteralPath "$processing_file")
     {
-        Remove-Item -LiteralPath "$processing_file"
+        #Remove-Item -LiteralPath "$processing_file"
+        delete_folder_or_file "$processing_file"
     }
 
 
@@ -2481,7 +2524,8 @@ function import_acronym_processing($input_file,$output_file)
     $reader.Close();
     if(Test-Path -LiteralPath "$processing_file")
     {
-        Remove-Item -LiteralPath "$processing_file"
+        #Remove-Item -LiteralPath "$processing_file"
+        delete_folder_or_file "$processing_file"
     }
 
 
@@ -2685,7 +2729,8 @@ function manage_acronyms_dialog
                 {
                     if(Test-Path -LiteralPath $this.name)
                     {
-                        Remove-Item -LiteralPath $this.name
+                        #Remove-Item -LiteralPath $this.name
+                        delete_folder_or_file $this.name
                     }
                     $Script:acronym_lists.remove("$file.csv");
                     build_acronym_menu
@@ -3083,7 +3128,8 @@ function xls_to_csv($input_file,$output_file,$mode)
         {
             if(Test-Path $output_file)
             {
-                Remove-Item -LiteralPath $output_file
+                #Remove-Item -LiteralPath $output_file
+                delete_folder_or_file $output_file
             }
             get-childItem "$base_directory\*.csv" | foreach {
                 $reader = [System.IO.File]::AppendAllText("$output_file",[System.IO.File]::ReadAllText($_.FullName))
@@ -3094,7 +3140,8 @@ function xls_to_csv($input_file,$output_file,$mode)
             }
             foreach($file in $output_names.GetEnumerator())
             {
-                remove-item -LiteralPath $file.key
+                #remove-item -LiteralPath $file.key
+                delete_folder_or_file $file.key
             }
             $output_names.clear();
             $output_names.add($output_file,"");
@@ -3204,7 +3251,9 @@ function save_bullet_tracker
     {
         if(Test-Path -LiteralPath "$dir\Resources\Required\Bullet_lists.txt")
         {
-            Remove-Item -LiteralPath "$dir\Resources\Required\Bullet_lists.txt"
+            #Remove-Item -LiteralPath "$dir\Resources\Required\Bullet_lists.txt"
+            delete_folder_or_file "$dir\Resources\Required\Bullet_lists.txt"
+
         }
         Rename-Item -LiteralPath "$dir\Resources\Required\Bullet_lists_temp.txt" "$dir\Resources\Required\Bullet_lists.txt"
     }
@@ -3229,7 +3278,8 @@ function save_acronym_tracker
     {
         if(Test-path -LiteralPath "$dir\Resources\Required\Acronym_lists.txt")
         {
-            Remove-Item -LiteralPath "$dir\Resources\Required\Acronym_lists.txt"
+            #Remove-Item -LiteralPath "$dir\Resources\Required\Acronym_lists.txt"
+            delete_folder_or_file "$dir\Resources\Required\Acronym_lists.txt"
         }
         Rename-Item -LiteralPath "$dir\Resources\Required\Acronym_lists_temp.txt" "$dir\Resources\Required\Acronym_lists.txt"
     }
@@ -3253,7 +3303,8 @@ function save_package_tracker
     {
         if(Test-Path -LiteralPath "$dir\Resources\Required\Package_list.txt")
         {
-            Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+            #Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+            delete_folder_or_file "$dir\Resources\Required\Package_list.txt"
         }
         Rename-Item -LiteralPath "$dir\Resources\Required\Package_list_temp.txt" "$dir\Resources\Required\Package_list.txt"
     }
@@ -5647,7 +5698,8 @@ function initial_checks
         {
             if(Test-Path -LiteralPath "$dir\Resources\Required\Bullet_lists.txt")
             {
-                Remove-Item -LiteralPath "$dir\Resources\Required\Bullet_lists.txt"
+                #Remove-Item -LiteralPath "$dir\Resources\Required\Bullet_lists.txt"
+                delete_folder_or_file "$dir\Resources\Required\Bullet_lists.txt"
             }
             Rename-Item -LiteralPath "$dir\Resources\Required\Bullet_lists_temp.txt" "$dir\Resources\Required\Bullet_lists.txt"
         }
@@ -5693,7 +5745,9 @@ function initial_checks
         {
             if(Test-Path -LiteralPath "$dir\Resources\Required\Acronym_lists.txt")
             {
-                Remove-Item -LiteralPath "$dir\Resources\Required\Acronym_lists.txt"
+                #Remove-Item -LiteralPath "$dir\Resources\Required\Acronym_lists.txt"
+                delete_folder_or_file "$dir\Resources\Required\Acronym_lists.txt"
+
             }
             Rename-Item -LiteralPath "$dir\Resources\Required\Acronym_lists_temp.txt" "$dir\Resources\Required\Acronym_lists.txt"
         }
@@ -5739,7 +5793,8 @@ function initial_checks
         {
             if(Test-Path -LiteralPath "$dir\Resources\Required\Package_list.txt")
             {
-                Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+                #Remove-Item -LiteralPath "$dir\Resources\Required\Package_list.txt"
+                delete_folder_or_file "$dir\Resources\Required\Package_list.txt"
             }
             Rename-Item -LiteralPath "$dir\Resources\Required\Package_list_temp.txt" "$dir\Resources\Required\Package_list.txt"
         }
@@ -6115,7 +6170,8 @@ function update_settings
     {
         if(Test-Path "$dir\Resources\Required\Buffer_Settings.csv")
         {
-            Remove-Item "$dir\Resources\Required\Buffer_Settings.csv"
+            #Remove-Item "$dir\Resources\Required\Buffer_Settings.csv"
+            delete_folder_or_file "$dir\Resources\Required\Buffer_Settings.csv"
         }
         $buffer_settings = new-object system.IO.StreamWriter("$dir\Resources\Required\Buffer_Settings.csv",$true)
         $buffer_settings.write("PROPERTY,VALUE`r`n");
@@ -6130,7 +6186,8 @@ function update_settings
         {
             if(Test-Path -LiteralPath "$dir\Resources\Required\Settings.csv")
             {
-                Remove-Item -LiteralPath "$dir\Resources\Required\Settings.csv"
+                #Remove-Item -LiteralPath "$dir\Resources\Required\Settings.csv"
+                delete_folder_or_file "$dir\Resources\Required\Settings.csv"
             }
             Rename-Item -LiteralPath "$dir\Resources\Required\Buffer_Settings.csv" "$dir\Resources\Required\Settings.csv"
         }
@@ -6955,7 +7012,8 @@ function save_package_dialog
                         $script:package_list.add($new_package,$value);
                         
 
-                        Remove-item "$dir\Resources\Packages\$new_package" -Recurse
+                        #Remove-item "$dir\Resources\Packages\$new_package" -Recurse
+                        delete_folder_or_file "$dir\Resources\Packages\$new_package"
                         Copy-item "$dir\Resources\Packages\$og_package" "$dir\Resources\Packages\$new_package" -Recurse
                         $script:settings['PACKAGE'] = $new_package
                         save_history
@@ -6968,7 +7026,8 @@ function save_package_dialog
                       }
                       if(($og_package -eq "Current") -and (Test-path -literalpath "$dir\Resources\Packages\$new_package") -and (test-path -literalpath "$dir\Resources\Packages\Current"))
                       {
-                            Remove-Item "$dir\Resources\Packages\Current" -Recurse
+                            #Remove-Item "$dir\Resources\Packages\Current" -Recurse
+                            delete_folder_or_file "$dir\Resources\Packages\Current"
                             $script:package_list.remove("Current");
                       }
                       $script:Form.Text = "$script:program_title ($new_package)"
@@ -6996,7 +7055,8 @@ function save_package_dialog
                     save_history
                     if(($og_package -eq "Current") -and (Test-path -literalpath "$dir\Resources\Packages\$new_package") -and (test-path -literalpath "$dir\Resources\Packages\Current"))
                     {
-                        Remove-Item "$dir\Resources\Packages\Current" -Recurse
+                        #Remove-Item "$dir\Resources\Packages\Current" -Recurse
+                        delete_folder_or_file "$dir\Resources\Packages\Current"
                         $script:package_list.remove("Current");
                     }
                     
@@ -7181,7 +7241,8 @@ function manage_package_dialog
                 {
                     if(Test-Path -LiteralPath "$dir\Resources\Packages\$file")
                     {
-                        Remove-Item -LiteralPath "$dir\Resources\Packages\$file" -Recurse
+                        #Remove-Item -LiteralPath "$dir\Resources\Packages\$file" -Recurse
+                        delete_folder_or_file "$dir\Resources\Packages\$file"
                         $script:package_list.Remove($file);
                         save_package_tracker
                         build_bullet_menu     
@@ -11327,7 +11388,8 @@ function save_theme_dialog
                 $yesno = [System.Windows.Forms.MessageBox]::Show("$message","Overwrite?", "YesNo" , "Information" , "Button1")
                 if($yesno -eq "Yes")
                 {         
-                    Remove-item "$dir\Resources\Themes\$new_theme.csv" -Recurse
+                    #Remove-item "$dir\Resources\Themes\$new_theme.csv" -Recurse
+                    delete_folder_or_file "$dir\Resources\Themes\$new_theme.csv"
                     $theme_writer = new-object system.IO.StreamWriter("$dir\Resources\Themes\$new_theme.csv",$true)
                     $theme_writer.write("PROPERTY,VALUE`r`n");
                     foreach($color in $script:theme_settings.GetEnumerator() | sort key)
@@ -11614,7 +11676,8 @@ function manage_themes
                     $delete_name = "$dir\Resources\Themes\" + $this.name + ".csv"
                     if(Test-Path -literalpath $delete_name)
                     {
-                        Remove-Item -literalpath $delete_name -Force
+                        #Remove-Item -literalpath $delete_name -Force
+                        delete_folder_or_file $delete_name
                     }
                     $manage_themes_form.close();
                     $script:reload_function = "manage_themes"
@@ -14170,6 +14233,12 @@ function about_dialog
     $version_box.ScrollBars = "Vertical"
     $version_box.AccessibleName = "";
     $version_box.text = "
+    --------------------------------------------------------------------
+    Version 1.5.1:
+    --------------------------------------------------------------------
+    Date: 13 Dec 2021
+    Bug Fixed: Fixed issue with OneDrive files not deleting
+
     --------------------------------------------------------------------
     Version 1.5:
     --------------------------------------------------------------------
