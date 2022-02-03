@@ -37,7 +37,7 @@ $Window = [Windows.Markup.XamlReader]::Load($Reader)
 
 ##System Vars
 $script:program_title = "Bullet Blender"
-$script:program_version = "1.5.1 (Beta - 13 Dec 2021)"
+$script:program_version = "1.6 (Beta - 3 Feb 2022)"
 $script:settings = @{};                    #Contains System Settings
 $script:return = 0;                        #Catches return from certain functions
 $script:logfile = "$dir\Resources\Required\Log.txt"; if(Test-Path -literalpath $script:logfile)
@@ -5017,6 +5017,19 @@ Function flush_memory
     $Script:Timer.Start()
 }
 ################################################################################
+######Auto Clock################################################################
+function auto_clock
+{
+    $clock_memory = (Get-Process -id $PID | Sort-Object WorkingSet64 | Select-Object Name,@{Name='WorkingSet';Expression={($_.WorkingSet64)}})
+    $clock_memory = [System.Math]::Round(([int]$clock_memory.WorkingSet)/1mb, 0)
+
+    $clock_speed = (($clock_memory / 10) * 20)
+
+    $Script:Timer.Interval = $clock_speed
+
+    Write-host "CS: $clock_speed ME: $clock_memory TI: $clock_speed" 
+}
+################################################################################
 ######Idle Timer################################################################
 Function Idle_Timer
 {
@@ -5404,6 +5417,7 @@ Function Idle_Timer
         Log "Save History End"
         Log "BLANK"
 
+        #auto_clock   (Expiermental)
         flush_memory
         var_sizes
     }
@@ -13361,6 +13375,8 @@ function acronym_list_dialog($type)
         {
             $line = $line.substring(0,($line.Length - 2))
         }
+        
+
         $acronym_box.Text = $line
         $acronym_box.SelectAll();
         $acronym_box.selectionfont = [Drawing.Font]::New($script:theme_settings['EDITOR_FONT'], [Decimal]$script:theme_settings['EDITOR_FONT_SIZE'])
@@ -13385,6 +13401,91 @@ function acronym_list_dialog($type)
             $message = "Any edits you make to your acronym list will not be saved when you close this window. Copy & Paste your work somewhere before exiting!`n"
             [System.Windows.MessageBox]::Show($message,"!!!WARNING!!!",'Ok')
         }
+        if($acronym_title.text  -match "EPR")
+        {
+            #clear-host
+            ####################################################################
+            $line = $this.text
+            #$line = $line -replace "`n`r|`n|`r",""
+            $word_size = 0;
+            $line_number = 0;
+            $total_size = 0;
+            [double]$size = 0;
+            $line_text = "";
+            $over = 0;
+            $word = "";
+            for ($i = 0; $i -lt $line.length; $i++)
+            {
+                $character = $line[$i]
+                if(!($character -match "`n`r|`n|`r"))
+                {
+                    if($character_blocks.Contains("$character"))
+                    {
+                        $size = $size + ($character_blocks["$character"])
+                        $total_size = $total_size + $size
+                        $word_size = $word_size + ($character_blocks["$character"])
+                        $word = "$word" + "$character"
+                        $line_text = "$line_text" + "$character" 
+                    }
+                    else
+                    {
+                        #write-host "Missing Character Block For `"$character`""
+                        #exit
+                    }
+                }
+                else
+                {
+                    #write-host $line_text
+                    $line_text = ""
+                    $line_number++;
+                }
+
+                #################
+                if($size -gt 2732)
+                {
+                    
+                    $pattern = "$([regex]::escape($word))"
+                    $line_text = $line_text -replace "$pattern$",""
+                    #write-host $line_text = $size
+                    #write-host $word
+                    $line_text = "$word"
+                    $word = "";
+                    $line_number++;
+                    if($line_number -ge 5)
+                    {
+                        $over = 1;
+                    }
+                    $size = $word_size; #Word Moved to next line
+                }
+                if($character -match " | | | |`n`r|`n|`r")
+                {
+                    $word_size = 0
+                    $word = ""
+                }
+            }
+
+
+
+
+
+
+
+
+
+
+
+            if($over -eq 1)
+            { 
+                #write-host -foregroundcolor Red "$total_size"
+                $acronym_title.ForeColor                = $script:theme_settings['TEXT_CALCULATOR_OVER_COLOR']
+            }
+            else
+            {
+                #write-host -foregroundcolor Green "$total_size"
+                $acronym_title.ForeColor                = $script:theme_settings['DIALOG_TITLE_FONT_COLOR']
+            }
+            ##########################################################################
+        }#EPR
     })
 
     $acronym_box.Add_MouseDown({     
@@ -13692,6 +13793,7 @@ function system_settings_dialog
     $memory_flushing_trackbar.LargeChange = 1;
     $memory_flushing_trackbar.AccessibleName = "Off"
     $memory_flushing_trackbar.value = 1
+    $memory_flushing_trackbar_label.text = "Off"
     $memory_flushing_trackbar.add_ValueChanged({
         if($this.value -eq 1)
         {
@@ -13711,7 +13813,6 @@ function system_settings_dialog
         }
     })
     $memory_flushing_trackbar.Value = $script:settings['MEMORY_FLUSHING']
-
 
     ################################################################################
     ######Memory Flushing Trackbar Label#############################################
@@ -14233,6 +14334,12 @@ function about_dialog
     $version_box.ScrollBars = "Vertical"
     $version_box.AccessibleName = "";
     $version_box.text = "
+    --------------------------------------------------------------------
+    Version 1.6:
+    --------------------------------------------------------------------
+    Date: 3 Feb 2022
+    New Feature: Added support for length of EPR acronym list.
+
     --------------------------------------------------------------------
     Version 1.5.1:
     --------------------------------------------------------------------
